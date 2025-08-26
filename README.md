@@ -1,6 +1,6 @@
 # Virtue Burp Power Tools
 
-Virtue Burp Power Tools is a Burp Extension (Using Montoya API) produced by Virtue Security that we use in our penetration tests to support probing applications for vulnerabilities, providing custom session handling, and supporting extraction of information for documentation in Markdown format. The features include:
+Virtue Burp Power Tools is a Burp Extension (Using Montoya API) produced by [Virtue Security](https://www.virtuesecurity.com) that we use in our penetration tests to support probing applications for vulnerabilities, providing custom session handling, and supporting extraction of information for documentation in Markdown format. The features include:
 
 - Right-Click Context Menu:
   - Copy one or more requests and responses to support pasting the information as Markdown into notes or reports
