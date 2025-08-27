@@ -47,8 +47,6 @@ class MontoyaKotlinSessionAccessTokenHelper(private val api : MontoyaApi, privat
 
         api.http().registerSessionHandlingAction(this)
 
-        api.userInterface().registerSettingsPanel(myExtensionSettings.settingsPanel)
-
         api.userInterface().registerContextMenuItemsProvider(this)
 
         api.http().registerHttpHandler(this)

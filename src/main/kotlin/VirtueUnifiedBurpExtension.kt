@@ -96,10 +96,10 @@ class MyExtensionSettings {
 
 
     val varExtInjVar1SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable1}} Search Enabled", false)
-    val varExtInjVar1Search: String by settingsManager.stringSetting("VarExtInj:  Populate {{variable1}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+    val varExtInjVar1Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable1}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
 
     val varExtInjVar2SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable2}} Search Enabled", false)
-    val varExtInjVar2Search: String by settingsManager.stringSetting("VarExtInj:  Populate {{variable2}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+    val varExtInjVar2Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable2}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
 
     val varExtInjVar3SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable3}} Search Enabled", false)
     val varExtInjVar3Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable3}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
