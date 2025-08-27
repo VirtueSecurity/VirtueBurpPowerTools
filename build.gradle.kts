@@ -38,7 +38,7 @@ dependencies {
     // Enable these if you want to use https://github.com/ncoblentz/BurpMontoyaLibrary
     implementation("com.github.ncoblentz:BurpMontoyaLibrary:0.2.0")
 
-    implementation("org.json:json:20240303")
+    implementation("org.json:json:20250517")
 }
 
 tasks.test {
