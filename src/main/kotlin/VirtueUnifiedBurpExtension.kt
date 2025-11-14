@@ -42,11 +42,12 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         RetryRequestsMontoya(api, projectSettings)
         CopyRequestResponse(api)
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
-        VariableExtractInjectExtension(api, projectSettings)
+//        VariableExtractInjectExtension(api, projectSettings)
 
 
         api.userInterface().registerSettingsPanel(projectSettings.settingsPanel)
 
+        api.userInterface().registerContextMenuItemsProvider(ApplyAnomalyRank(api))
 
         api.logging().logToOutput("...Finished loading the extension")
 
@@ -95,34 +96,34 @@ class MyExtensionSettings {
     val followRedirectSetting: Boolean by settingsManager.booleanSetting("Every Param: Follow Redirects?", false)
 
 
-    val varExtInjVar1SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable1}} Search Enabled", false)
-    val varExtInjVar1Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable1}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
-
-    val varExtInjVar2SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable2}} Search Enabled", false)
-    val varExtInjVar2Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable2}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
-
-    val varExtInjVar3SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable3}} Search Enabled", false)
-    val varExtInjVar3Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable3}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
-
-    val varExtInjVar4SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable4}} Search Enabled", false)
-    val varExtInjVar4Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable4}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
-
-
-    val varExtInjReplaceEnabled1: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 1 Enabled", false)
-    val varExtInjSearch1: String by settingsManager.stringSetting("VarExtInj: Search 1 Statement", "^token: (.+) .*$")
-    val varExtInjReplace1: String by settingsManager.stringSetting("VarExtInj: Replace 1 Statement", "token: $1 {{variable1}}")
-
-    val varExtInjReplaceEnabled2: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 2 Enabled", false)
-    val varExtInjSearch2: String by settingsManager.stringSetting("VarExtInj: Search 2 Statement", "^token: (.+) .*$")
-    val varExtInjReplace2: String by settingsManager.stringSetting("VarExtInj: Replace 2 Statement", "token: $1 {{variable2}}")
-
-    val varExtInjReplaceEnabled3: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 3 Enabled", false)
-    val varExtInjSearch3: String by settingsManager.stringSetting("VarExtInj: Search 3 Statement", "^token: (.+) .*$")
-    val varExtInjReplace3: String by settingsManager.stringSetting("VarExtInj: Replace 3 Statement", "token: $1 {{variable3}}")
-
-    val varExtInjReplaceEnabled4: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 4 Enabled", false)
-    val varExtInjSearch4: String by settingsManager.stringSetting("VarExtInj: Search 4 Statement", "^token: (.+) .*$")
-    val varExtInjReplace4: String by settingsManager.stringSetting("VarExtInj: Replace 4 Statement", "token: $1 {{variable4}}")
+//    val varExtInjVar1SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable1}} Search Enabled", false)
+//    val varExtInjVar1Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable1}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+//
+//    val varExtInjVar2SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable2}} Search Enabled", false)
+//    val varExtInjVar2Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable2}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+//
+//    val varExtInjVar3SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable3}} Search Enabled", false)
+//    val varExtInjVar3Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable3}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+//
+//    val varExtInjVar4SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable4}} Search Enabled", false)
+//    val varExtInjVar4Search: String by settingsManager.stringSetting("VarExtInj: Populate {{variable4}} Search Regex With Capture", "\"token\": \"([^\"]+)\"")
+//
+//
+//    val varExtInjReplaceEnabled1: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 1 Enabled", false)
+//    val varExtInjSearch1: String by settingsManager.stringSetting("VarExtInj: Search 1 Statement", "^token: (.+) .*$")
+//    val varExtInjReplace1: String by settingsManager.stringSetting("VarExtInj: Replace 1 Statement", "token: $1 {{variable1}}")
+//
+//    val varExtInjReplaceEnabled2: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 2 Enabled", false)
+//    val varExtInjSearch2: String by settingsManager.stringSetting("VarExtInj: Search 2 Statement", "^token: (.+) .*$")
+//    val varExtInjReplace2: String by settingsManager.stringSetting("VarExtInj: Replace 2 Statement", "token: $1 {{variable2}}")
+//
+//    val varExtInjReplaceEnabled3: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 3 Enabled", false)
+//    val varExtInjSearch3: String by settingsManager.stringSetting("VarExtInj: Search 3 Statement", "^token: (.+) .*$")
+//    val varExtInjReplace3: String by settingsManager.stringSetting("VarExtInj: Replace 3 Statement", "token: $1 {{variable3}}")
+//
+//    val varExtInjReplaceEnabled4: Boolean by settingsManager.booleanSetting("VarExtInj: Search/Replace 4 Enabled", false)
+//    val varExtInjSearch4: String by settingsManager.stringSetting("VarExtInj: Search 4 Statement", "^token: (.+) .*$")
+//    val varExtInjReplace4: String by settingsManager.stringSetting("VarExtInj: Replace 4 Statement", "token: $1 {{variable4}}")
 
 
     val accessTokenPatternSetting: String by settingsManager.stringSetting("SessionAccessToken: Access Token RegEx Pattern", "\"access_token\" *: *\"([^\"]+)\"")

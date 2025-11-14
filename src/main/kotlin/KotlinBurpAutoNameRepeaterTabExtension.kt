@@ -26,8 +26,8 @@ import javax.swing.JSeparator
 class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, private val myExtensionSettings: MyExtensionSettings) : ContextMenuItemsProvider {
 
     private var logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
-    private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater")
-    private val sendToOrganizerMenuItem = JMenuItem("Send To Organizer")
+    private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater & Auto Name")
+//    private val sendToOrganizerMenuItem = JMenuItem("Send To Organizer")
     private val includeBaseURLInScopeMenuItem = JMenuItem("Add Base URL to Scope")
     private val excludeBaseURLFromScopeMenuItem = JMenuItem("Exclude Base URL from Scope")
     private var requestResponses = emptyList<HttpRequestResponse>()
@@ -38,7 +38,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, /* sendToOrganizerMenuItem,*/ includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
 
     // Uncomment this section if you wish to use persistent settings and automatic UI Generation from: https://github.com/ncoblentz/BurpMontoyaLibrary
     // Add one or more persistent settings here
@@ -57,7 +57,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         // Just a simple hello world to start with
         api.userInterface().registerContextMenuItemsProvider(this)
         sendToRepeaterMenuItem.addActionListener {_ -> sendToRepeater() }
-        sendToOrganizerMenuItem.addActionListener {_ -> sendToOrganizer() }
+//        sendToOrganizerMenuItem.addActionListener {_ -> sendToOrganizer() }
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
 
@@ -91,40 +91,40 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     private fun getBasURL(requestResponse: HttpRequestResponse) : String = requestResponse.request().url().replace(requestResponse.request().path().substring(1),"")
 
-    private fun sendToOrganizer() {
-        if(requestResponses.isNotEmpty()) {
-            if(myExtensionSettings.tagGroupsInOrganizerNotesSetting && requestResponses.size>1) {
-                organizerCounter++
-            }
-
-            for(requestResponse in requestResponses) {
-                val annotationNotesBuilder = buildString {
-                    append(myExtensionSettings.prependStringToOrganizerNotesSetting+" ")
-                    if(myExtensionSettings.tagGroupsInOrganizerNotesSetting && requestResponses.size>1) {
-                        append(" $organizerCounter ")
-                    }
-                    if(myExtensionSettings.useTitleInOrganizerNotesSetting && requestResponse.hasResponse()) {
-                        val body = requestResponse.response().bodyToString()
-                        val titleStartString = "<title>"
-                        val titleStartIndex = body.indexOf(titleStartString)
-                        val titleEndIndex = body.indexOf("</title>")
-                        val headStartIndex = body.indexOf("<head>")
-                        val headEndIndex = body.indexOf("</head>")
-                        if(titleStartIndex != -1 && titleEndIndex != -1 && headStartIndex != -1 && headEndIndex != -1 &&
-                            titleStartIndex > headStartIndex && titleEndIndex < headEndIndex) {
-                            append(" "+body.substring(titleStartIndex+titleStartString.length,titleEndIndex)+" ")
-                        }
-                    }
-                    append(" "+myExtensionSettings.appendStringToOrganizerNotesSetting)
-                }
-
-                val highlightColor = HighlightColor.valueOf(myExtensionSettings.highlightColorForOrganizerSetting)
-
-
-                api.organizer().sendToOrganizer(requestResponse.withAnnotations(Annotations.annotations(annotationNotesBuilder.toString(),highlightColor)))
-            }
-        }
-    }
+//    private fun sendToOrganizer() {
+//        if(requestResponses.isNotEmpty()) {
+//            if(myExtensionSettings.tagGroupsInOrganizerNotesSetting && requestResponses.size>1) {
+//                organizerCounter++
+//            }
+//
+//            for(requestResponse in requestResponses) {
+//                val annotationNotesBuilder = buildString {
+//                    append(myExtensionSettings.prependStringToOrganizerNotesSetting+" ")
+//                    if(myExtensionSettings.tagGroupsInOrganizerNotesSetting && requestResponses.size>1) {
+//                        append(" $organizerCounter ")
+//                    }
+//                    if(myExtensionSettings.useTitleInOrganizerNotesSetting && requestResponse.hasResponse()) {
+//                        val body = requestResponse.response().bodyToString()
+//                        val titleStartString = "<title>"
+//                        val titleStartIndex = body.indexOf(titleStartString)
+//                        val titleEndIndex = body.indexOf("</title>")
+//                        val headStartIndex = body.indexOf("<head>")
+//                        val headEndIndex = body.indexOf("</head>")
+//                        if(titleStartIndex != -1 && titleEndIndex != -1 && headStartIndex != -1 && headEndIndex != -1 &&
+//                            titleStartIndex > headStartIndex && titleEndIndex < headEndIndex) {
+//                            append(" "+body.substring(titleStartIndex+titleStartString.length,titleEndIndex)+" ")
+//                        }
+//                    }
+//                    append(" "+myExtensionSettings.appendStringToOrganizerNotesSetting)
+//                }
+//
+//                val highlightColor = HighlightColor.valueOf(myExtensionSettings.highlightColorForOrganizerSetting)
+//
+//
+//                api.organizer().sendToOrganizer(requestResponse.withAnnotations(Annotations.annotations(annotationNotesBuilder.toString(),highlightColor)))
+//            }
+//        }
+//    }
 
     private fun sendToRepeater() {
         if(requestResponses.isNotEmpty()) {

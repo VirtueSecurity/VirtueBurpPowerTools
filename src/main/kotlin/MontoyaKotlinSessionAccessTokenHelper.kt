@@ -18,8 +18,10 @@ import burp.api.montoya.ui.settings.SettingsPanelWithData
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component
+import java.awt.Font
 import java.util.Optional
 import java.util.regex.Pattern
+import javax.swing.JLabel
 import javax.swing.JMenuItem
 import kotlin.properties.ReadOnlyProperty
 
@@ -33,6 +35,10 @@ class MontoyaKotlinSessionAccessTokenHelper(private val api : MontoyaApi, privat
 
     private val testJMenu = JMenuItem("Test It")
 
+    private val label = JLabel("  Session Access Token").apply {
+        isEnabled = false
+        font = font.deriveFont(Font.BOLD)
+    }
 
 
     companion object {
@@ -184,7 +190,7 @@ class MontoyaKotlinSessionAccessTokenHelper(private val api : MontoyaApi, privat
             if(it.selectedRequestResponses().isNotEmpty() || !it.messageEditorRequestResponse().isEmpty) {
                 selectedRequestResponses = it.selectedRequestResponses()
                 messageEditorRequestResponse = it.messageEditorRequestResponse()
-                return listOf(testJMenu)
+                return listOf(label,testJMenu)
             }
         }
         return super.provideMenuItems(event)

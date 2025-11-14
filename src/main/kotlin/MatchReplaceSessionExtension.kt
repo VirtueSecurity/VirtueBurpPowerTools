@@ -74,6 +74,8 @@ class MatchReplaceSessionExtension(private val api: MontoyaApi, private val myEx
 
 
         }
+
+
         // See logging comment above
         logger.debugLog("...Finished loading the Match Replace Session extension")
 
