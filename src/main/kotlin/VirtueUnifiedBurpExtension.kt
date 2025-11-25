@@ -3,6 +3,7 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.HighlightColor
 import burp.api.montoya.ui.settings.SettingsPanelBuilder
 import burp.api.montoya.ui.settings.SettingsPanelPersistence
+import com.nickcoblentz.montoya.DisposableEmailScanChecker
 import com.nickcoblentz.montoya.EveryParameter
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utilities.RetryRequestsMontoya
@@ -42,6 +43,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         RetryRequestsMontoya(api, projectSettings)
         CopyRequestResponse(api)
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
+        DisposableEmailScanChecker(api)
 //        VariableExtractInjectExtension(api, projectSettings)
 
 

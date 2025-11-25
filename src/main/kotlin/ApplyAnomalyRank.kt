@@ -11,14 +11,22 @@ import burp.api.montoya.ui.hotkey.HotKeyEvent
 import burp.api.montoya.ui.hotkey.HotKeyHandler
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
+import com.nickcoblentz.montoya.registerGlobalHotKey
 import java.awt.Component
 import java.awt.Font
+import java.awt.Robot
 import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.StringSelection
+import java.awt.event.ActionEvent
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
+import java.lang.Thread.sleep
 import java.util.function.Consumer
 import java.util.stream.Collectors
+import javax.swing.AbstractAction
 import javax.swing.JLabel
 import javax.swing.JMenuItem
+import javax.swing.KeyStroke
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -49,6 +57,21 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
         applyAnomalyRankMenuItem.addActionListener {
                 e -> applyAnomalyRank()
         }
+
+//        registerGlobalHotKey(KeyStroke.getKeyStroke(KeyEvent.VK_R,KeyEvent.CTRL_DOWN_MASK or KeyEvent.ALT_DOWN_MASK),"Apply Anomaly Rank", object : AbstractAction() {
+//            override fun actionPerformed(e: ActionEvent?) {
+//                logger.debugLog("Hot Key pressed!")
+//                val robot = Robot()
+//                robot.mousePress(InputEvent.BUTTON3_DOWN_MASK)
+//                robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
+//                //robot.delay(1000)
+//                sleep(1000)
+//                robot.keyPress(KeyEvent.VK_ESCAPE)
+//                robot.keyRelease(KeyEvent.VK_ESCAPE)
+//                applyAnomalyRankMenuItem.doClick()
+//            }
+//        })
+
 //        val hotKey = HotKey.hotKey("Apply Anomaly Rank", "Ctrl+Alt+R")
 //
 //        val handler = HotKeyHandler { event: HotKeyEvent ->
@@ -82,6 +105,7 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
 
     @OptIn(ExperimentalTime::class)
     private fun applyAnomalyRank() {
+        logger.debugLog("Applying Anomaly Rank...")
         Thread.ofVirtual().start {
             val rankedRequests = api.utilities().rankingUtils().rank(anomRankRequestResponses)
             val timestamp = Clock.System.now().epochSeconds
@@ -104,8 +128,10 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
     }
 
     override fun provideMenuItems(event: ContextMenuEvent?): List<Component?> {
+        logger.debugLog("Enter provideMenuItems")
         event?.let { nonNullEvent ->
             event.selectedRequestResponses().let { selectedRequestResponse ->
+                logger.debugLog("Found ${selectedRequestResponse.size} requests")
                 anomRankRequestResponses.clear()
                 anomRankRequestResponses.addAll(selectedRequestResponse)
                 return menuItems
