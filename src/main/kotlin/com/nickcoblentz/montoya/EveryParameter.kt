@@ -29,6 +29,7 @@ import java.awt.Font
 import java.awt.event.ActionEvent
 import java.util.concurrent.Executors
 import javax.swing.JLabel
+import javax.swing.JMenu
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
 
@@ -55,6 +56,8 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
     private val minimizeMenuItem = JMenuItem("Minimize")
     private val spoofIPMenuItem = JMenuItem("Spoof IP Using Headers")
     private val dnsOverHTTPMenuItem = JMenuItem("DNS-over-HTTP")
+    private val authorizationTestsMenuItem = JMenuItem("Authorization Tests")
+
     val label = JLabel("  Every").apply {
         isEnabled = false
         font = font.deriveFont(Font.BOLD)
@@ -63,33 +66,45 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
 
     private val allMenuItems = mutableListOf<Component>(
         label,
-        sqliQuickMenuItem,
-        sqliErrorPayloadsMenuItem,
+        JMenu("Others").apply {
+            add(sqliQuickMenuItem)
+            add(sqliErrorPayloadsMenuItem)
+            add(sqliSingleQuoteCommentPayloadsMenuItem)
+            add(sqliDoubleQuoteCommentPayloadsMenuItem)
+            add(sqliLogicPayloadsMenuItem)
+            add(xssMapMenuItem)
+            add(xssPayloadsMenuItem)
+            add(xmlOutOfBandMenuItem)
+            add(xmlFileMenuItem)
+            add(urlPathSpecialCharsMenuItem)
+            add(collabUrlMenuItem)
+            add(maxForwardsMenuItem)
+            add(log4jCollabMenuItem)
+            add(spoofIPMenuItem)
+            add(dnsOverHTTPMenuItem)
+            add(minimizeMenuItem)
+        },
+        authorizationTestsMenuItem,
         sqliConcatPayloadsMenuItem,
-        sqliSingleQuoteCommentPayloadsMenuItem,
-        sqliDoubleQuoteCommentPayloadsMenuItem,
-        sqliLogicPayloadsMenuItem,
-        xssMapMenuItem,
-        xssPayloadsMenuItem,
         blindXssImgMenuItem,
-        xmlOutOfBandMenuItem,
-        xmlFileMenuItem,
-        urlPathSpecialCharsMenuItem,
-        collabUrlMenuItem,
-        maxForwardsMenuItem,
-        log4jCollabMenuItem,
-        spoofIPMenuItem,
-        dnsOverHTTPMenuItem,
-        minimizeMenuItem,
         JSeparator()
     )
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
+    val testCaseNameHeader = "Z-Test-Case-Name"
+    val testCasePayloadHeader = "Z-Test-Case-Payload"
+    val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
+    val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
 
 
     companion object {
         private const val PLUGIN_NAME: String = "Every Parameter"
+        private const val testCaseCategoryHeader = "Z-Test-Case-Category"
+        private const val testCaseNameHeader = "Z-Test-Case-Name"
+        private const val testCasePayloadHeader = "Z-Test-Case-Payload"
+        private const val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
+        private const val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
     }
 
     init {
@@ -116,9 +131,12 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
         spoofIPMenuItem.addActionListener { e -> spoofIpActionPerformed(e) }
         dnsOverHTTPMenuItem.addActionListener { e-> dnsOverHTTPActionPerformed(e)}
         maxForwardsMenuItem.addActionListener { e-> maxForwardsActionPerformed(e)}
+        authorizationTestsMenuItem.addActionListener { e -> authorizationTestsActionPerformed(e) }
 
         logger.debugLog("...Finished Every Param")
     }
+
+
 
     override fun provideMenuItems(event: ContextMenuEvent?): MutableList<Component> {
         if(event?.selectedRequestResponses()?.size!!>0)
@@ -138,6 +156,44 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
 
     override fun provideMenuItems(event: AuditIssueContextMenuEvent?): MutableList<Component> {
         return mutableListOf<Component>()
+    }
+
+    private fun authorizationTestsActionPerformed(e: ActionEvent) {
+        logger.debugLog("Enter")
+        val category = "Authorization"
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+
+        myHttpRequestResponses.forEach {
+            executor.submit {
+                val responses = mutableListOf<HttpRequestResponse>()
+                val testCases = mutableListOf(
+                    labelTestCase(it.request(),category,"Original","","","")
+                )
+                it.request().pathSlices().forEach { slice ->
+                    val test = it.request().replacePathSlice(slice,slice.value.map { char ->
+                    if (char.isUpperCase()) char.lowercaseChar() else char.uppercaseChar()
+                        }.joinToString(""))
+                    testCases.add(test)
+                }
+                testCases.forEach {
+                    val response = sendRequestConsiderSettings(it)
+                    responses.add(response)
+                }
+
+
+            }
+        }
+        logger.debugLog("Exit")
+    }
+
+
+
+    private fun labelTestCase(request : HttpRequest, category: String, name: String, payload: String, grepStart: String, grepEnd: String) : HttpRequest {
+        return request.withAddedHeader(testCaseGrepEndHeader,api.utilities().base64Utils().encodeToString(category))
+            .withAddedHeader(testCaseNameHeader,api.utilities().base64Utils().encodeToString(name))
+            .withAddedHeader(testCasePayloadHeader,api.utilities().base64Utils().encodeToString(payload))
+            .withAddedHeader(testCaseGrepStartHeader,api.utilities().base64Utils().encodeToString(grepStart))
+            .withAddedHeader(testCaseGrepEndHeader,api.utilities().base64Utils().encodeToString(grepEnd))
     }
 
     fun maxForwardsActionPerformed(event: ActionEvent?) {

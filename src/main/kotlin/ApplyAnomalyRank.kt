@@ -123,7 +123,7 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
         when(option) {
             AnomalyRankOption.NONE -> internalApplyRank(anomRankRequestResponses)
             AnomalyRankOption.UNIQUE_URL -> {
-                val reqRes = anomRankRequestResponses.groupBy { "${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}" }
+                val reqRes = anomRankRequestResponses.groupBy { "${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}".lowercase() }
                 var count = 0;
                 reqRes.forEach { (groupName, response) ->
                     logger.debugLog("Sending Ranking Task: $groupName")
@@ -132,7 +132,7 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
             }
             AnomalyRankOption.UNIQUE_URL_VERB -> {
                 var count = 0;
-                val reqRes = anomRankRequestResponses.groupBy { "${it.request().method()} ${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}" }
+                val reqRes = anomRankRequestResponses.groupBy { "${it.request().method()} ${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}".lowercase() }
                 reqRes.forEach { (groupName, response) ->
                     logger.debugLog("Sending Ranking Task: $groupName")
                     internalApplyRank(response,"U_URL_VERB ${count++}")

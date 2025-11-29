@@ -104,13 +104,13 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
                 SendToOrganizerOption.UNIQUE_PATH -> requestResponses.groupBy {
                     "${it.request().method()} ${
                         it.request().pathWithoutQuery()
-                    }"
+                    }".lowercase()
                 }
 
                 SendToOrganizerOption.UNIQUE_URL -> requestResponses.groupBy {
                     "${it.request().method()} ${
                         it.request().url()
-                    }"
+                    }".lowercase()
                 }
 
                 SendToOrganizerOption.NONE -> mapOf("none" to requestResponses)
@@ -123,7 +123,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
                     val rankedRequests = api.utilities().rankingUtils().rank(rqRs)
                     val uniqueRankedRequests = rankedRequests.distinctBy { it.rank() }
                     uniqueRankedRequests.forEach {
-                        api.organizer().sendToOrganizer(it.requestResponse())
+                        val rqRs = it.requestResponse().withAnnotations(Annotations.annotations("Rank: ${it.rank()}"))
+                        api.organizer().sendToOrganizer(rqRs)
                     }
                 }
             }
