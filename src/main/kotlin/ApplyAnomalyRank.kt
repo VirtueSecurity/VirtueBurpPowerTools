@@ -39,12 +39,14 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
 
     private val logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val applyAnomalyRankMenuItem = JMenuItem("Apply")
+    private val applyAnomalyRankUniqueURLMenuItem = JMenuItem("Apply (Unique URL)")
+    private val applyAnomalyRankMenuUniqueURLVerbItem = JMenuItem("Apply (Unique VERB/URL)")
     private val label = JLabel("  Anomaly Rank").apply {
         isEnabled = false
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,applyAnomalyRankMenuItem)
+    private val menuItems : MutableList<Component> = mutableListOf(label,applyAnomalyRankMenuItem,applyAnomalyRankUniqueURLMenuItem,applyAnomalyRankMenuUniqueURLVerbItem)
 
     //private val projectSettings : MyProjectSettings by lazy { MyProjectSettings() }
 
@@ -54,6 +56,12 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
 
     init {
         logger.debugLog("initializing Anomaly Rank...")
+        applyAnomalyRankUniqueURLMenuItem.addActionListener {
+                e -> applyAnomalyRank(AnomalyRankOption.UNIQUE_URL)
+        }
+        applyAnomalyRankMenuUniqueURLVerbItem.addActionListener {
+                e -> applyAnomalyRank(AnomalyRankOption.UNIQUE_URL_VERB)
+        }
         applyAnomalyRankMenuItem.addActionListener {
                 e -> applyAnomalyRank()
         }
@@ -103,23 +111,50 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
         logger.debugLog("...Finished Anomaly Rank Init.")
     }
 
-    @OptIn(ExperimentalTime::class)
-    private fun applyAnomalyRank() {
+    enum class AnomalyRankOption {
+        NONE,
+        UNIQUE_URL,
+        UNIQUE_URL_VERB
+    }
+
+
+    private fun applyAnomalyRank(option : AnomalyRankOption = AnomalyRankOption.NONE) {
         logger.debugLog("Applying Anomaly Rank...")
+        when(option) {
+            AnomalyRankOption.NONE -> internalApplyRank(anomRankRequestResponses)
+            AnomalyRankOption.UNIQUE_URL -> {
+                val reqRes = anomRankRequestResponses.groupBy { it.request().url() }
+                var count = 0;
+                reqRes.forEach { (url, response) ->
+                    internalApplyRank(response,"U_URL ${count++}")
+                }
+            }
+            AnomalyRankOption.UNIQUE_URL_VERB -> {
+                var count = 0;
+                val reqRes = anomRankRequestResponses.groupBy { "${it.request().method()} ${it.request().url()}" }
+                reqRes.forEach { (url, response) -> internalApplyRank(response,"U_URL_VERB ${count++}") }
+            }
+        }
+
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private fun internalApplyRank(requestResponses : List<HttpRequestResponse>,label : String = "") {
         Thread.ofVirtual().start {
-            val rankedRequests = api.utilities().rankingUtils().rank(anomRankRequestResponses)
-            val timestamp = Clock.System.now().epochSeconds
+            val rankedRequests = api.utilities().rankingUtils().rank(requestResponses)
+            val timestamp = label.ifBlank { Clock.System.now().epochSeconds.toString() }
+
             val maxRank = rankedRequests.maxOf { it.rank() }
             val maxLength = maxRank.toString().length
 
-            for (i in anomRankRequestResponses.indices) {
+            for (i in requestResponses.indices) {
 
 
                 if (i < rankedRequests.size) {
                     val floatRank = rankedRequests[i].rank()
 
 
-                    anomRankRequestResponses[i].annotations()
+                    requestResponses[i].annotations()
                         .setNotes("Anom Rank $timestamp: ${String.format("%0${maxLength}d", floatRank)}")
                 }
 
