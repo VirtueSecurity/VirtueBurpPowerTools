@@ -1,17 +1,12 @@
-import burp.api.montoya.BurpExtension
 import burp.api.montoya.MontoyaApi
-import burp.api.montoya.core.HighlightColor
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
-import burp.api.montoya.ui.settings.SettingsPanelBuilder
-import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
-import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import java.awt.Component
 import javax.swing.JMenuItem
 import burp.api.montoya.core.Annotations
@@ -27,7 +22,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     private var logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater & Auto Name")
-//    private val sendToOrganizerMenuItem = JMenuItem("Send To Organizer")
+    private val sendToOrganizerUniqueURLMenuItem = JMenuItem("Send Unique Verb/URL To Organizer")
+    private val sendToOrganizerUniquePathMenuItem = JMenuItem("Send Unique Verb/Host/Path To Organizer")
     private val includeBaseURLInScopeMenuItem = JMenuItem("Add Base URL to Scope")
     private val excludeBaseURLFromScopeMenuItem = JMenuItem("Exclude Base URL from Scope")
     private var requestResponses = emptyList<HttpRequestResponse>()
@@ -38,7 +34,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, /* sendToOrganizerMenuItem,*/ includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueURLMenuItem,sendToOrganizerUniquePathMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
 
     // Uncomment this section if you wish to use persistent settings and automatic UI Generation from: https://github.com/ncoblentz/BurpMontoyaLibrary
     // Add one or more persistent settings here
@@ -57,7 +53,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         // Just a simple hello world to start with
         api.userInterface().registerContextMenuItemsProvider(this)
         sendToRepeaterMenuItem.addActionListener {_ -> sendToRepeater() }
-//        sendToOrganizerMenuItem.addActionListener {_ -> sendToOrganizer() }
+        sendToOrganizerUniquePathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_PATH) }
+        sendToOrganizerUniqueURLMenuItem.addActionListener {_ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_URL) }
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
 
@@ -68,10 +65,16 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     }
 
+    enum class SendToOrganizerOption {
+        NONE,
+        UNIQUE_URL,
+        UNIQUE_PATH
+    }
+
     private fun includeInScope() {
         if(requestResponses.isNotEmpty()) {
             for(requestResponse in requestResponses) {
-                val url = getBasURL(requestResponse)
+                val url = getBaseURL(requestResponse)
                 api.logging().logToOutput(requestResponse.request().url())
                 api.logging().logToOutput(url)
                 api.scope().includeInScope(url);
@@ -82,21 +85,51 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
     private fun excludeFromScope() {
         if(requestResponses.isNotEmpty()) {
             for(requestResponse in requestResponses) {
-                val url = getBasURL(requestResponse)
+                val url = getBaseURL(requestResponse)
                 api.logging().logToOutput(url)
                 api.scope().excludeFromScope(url)
             }
         }
     }
 
-    private fun getBasURL(requestResponse: HttpRequestResponse) : String = requestResponse.request().url().replace(requestResponse.request().path().substring(1),"")
+    private fun getBaseURL(requestResponse: HttpRequestResponse) : String = requestResponse.request().url().replace(requestResponse.request().path().substring(1),"")
 
-//    private fun sendToOrganizer() {
-//        if(requestResponses.isNotEmpty()) {
+    private fun sendToOrganizer(option : SendToOrganizerOption) {
+        if(requestResponses.isNotEmpty()) {
 //            if(myExtensionSettings.tagGroupsInOrganizerNotesSetting && requestResponses.size>1) {
 //                organizerCounter++
 //            }
-//
+
+            val groupedRequestResponses = when (option) {
+                SendToOrganizerOption.UNIQUE_PATH -> requestResponses.groupBy {
+                    "${it.request().method()} ${
+                        it.request().pathWithoutQuery()
+                    }"
+                }
+
+                SendToOrganizerOption.UNIQUE_URL -> requestResponses.groupBy {
+                    "${it.request().method()} ${
+                        it.request().url()
+                    }"
+                }
+
+                SendToOrganizerOption.NONE -> mapOf("none" to requestResponses)
+            }
+
+            groupedRequestResponses.forEach { (groupName, rqRs) ->
+                logger.debugLog("Working on group: $groupName")
+                Thread.ofVirtual().start {
+                    logger.debugLog("Ranking...")
+                    val rankedRequests = api.utilities().rankingUtils().rank(rqRs)
+                    val uniqueRankedRequests = rankedRequests.distinctBy { it.rank() }
+                    uniqueRankedRequests.forEach {
+                        api.organizer().sendToOrganizer(it.requestResponse())
+                    }
+                }
+            }
+        }
+    }
+
 //            for(requestResponse in requestResponses) {
 //                val annotationNotesBuilder = buildString {
 //                    append(myExtensionSettings.prependStringToOrganizerNotesSetting+" ")
@@ -117,9 +150,9 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 //                    }
 //                    append(" "+myExtensionSettings.appendStringToOrganizerNotesSetting)
 //                }
-//
+
 //                val highlightColor = HighlightColor.valueOf(myExtensionSettings.highlightColorForOrganizerSetting)
-//
+
 //
 //                api.organizer().sendToOrganizer(requestResponse.withAnnotations(Annotations.annotations(annotationNotesBuilder.toString(),highlightColor)))
 //            }
