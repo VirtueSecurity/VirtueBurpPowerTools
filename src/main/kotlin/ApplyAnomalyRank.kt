@@ -39,8 +39,8 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
 
     private val logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val applyAnomalyRankMenuItem = JMenuItem("Apply")
-    private val applyAnomalyRankUniqueURLMenuItem = JMenuItem("Apply (Unique URL)")
-    private val applyAnomalyRankMenuUniqueURLVerbItem = JMenuItem("Apply (Unique VERB/URL)")
+    private val applyAnomalyRankUniqueURLMenuItem = JMenuItem("Apply (Unique Host+Path)")
+    private val applyAnomalyRankMenuUniqueURLVerbItem = JMenuItem("Apply (Unique Verb+Host+Path)")
     private val label = JLabel("  Anomaly Rank").apply {
         isEnabled = false
         font = font.deriveFont(Font.BOLD)
@@ -123,16 +123,20 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
         when(option) {
             AnomalyRankOption.NONE -> internalApplyRank(anomRankRequestResponses)
             AnomalyRankOption.UNIQUE_URL -> {
-                val reqRes = anomRankRequestResponses.groupBy { it.request().url() }
+                val reqRes = anomRankRequestResponses.groupBy { "${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}" }
                 var count = 0;
-                reqRes.forEach { (url, response) ->
+                reqRes.forEach { (groupName, response) ->
+                    logger.debugLog("Sending Ranking Task: $groupName")
                     internalApplyRank(response,"U_URL ${count++}")
                 }
             }
             AnomalyRankOption.UNIQUE_URL_VERB -> {
                 var count = 0;
-                val reqRes = anomRankRequestResponses.groupBy { "${it.request().method()} ${it.request().url()}" }
-                reqRes.forEach { (url, response) -> internalApplyRank(response,"U_URL_VERB ${count++}") }
+                val reqRes = anomRankRequestResponses.groupBy { "${it.request().method()} ${it.httpService().host()}:${it.httpService().port()}${it.request().pathWithoutQuery()}" }
+                reqRes.forEach { (groupName, response) ->
+                    logger.debugLog("Sending Ranking Task: $groupName")
+                    internalApplyRank(response,"U_URL_VERB ${count++}")
+                }
             }
         }
 
@@ -141,11 +145,14 @@ class ApplyAnomalyRank(private val api: MontoyaApi) : ContextMenuItemsProvider {
     @OptIn(ExperimentalTime::class)
     private fun internalApplyRank(requestResponses : List<HttpRequestResponse>,label : String = "") {
         Thread.ofVirtual().start {
+            logger.debugLog("Ranking Task: $label")
             val rankedRequests = api.utilities().rankingUtils().rank(requestResponses)
             val timestamp = label.ifBlank { Clock.System.now().epochSeconds.toString() }
 
             val maxRank = rankedRequests.maxOf { it.rank() }
             val maxLength = maxRank.toString().length
+
+
 
             for (i in requestResponses.indices) {
 
