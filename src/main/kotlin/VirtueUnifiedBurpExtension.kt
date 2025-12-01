@@ -5,6 +5,7 @@ import burp.api.montoya.ui.settings.SettingsPanelBuilder
 import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import com.nickcoblentz.montoya.DisposableEmailScanChecker
 import com.nickcoblentz.montoya.EveryParameter
+import com.nickcoblentz.montoya.ManualScanIssueManager
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utilities.RetryRequestsMontoya
 import com.nickcoblentz.montoya.utils.CopyRequestResponse
@@ -44,6 +45,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         CopyRequestResponse(api)
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
         DisposableEmailScanChecker(api)
+        ManualScanIssueManager(api)
 //        VariableExtractInjectExtension(api, projectSettings)
 
 
@@ -96,6 +98,7 @@ class MyExtensionSettings {
 
     val ignoreParametersSetting: String by settingsManager.stringSetting("Every Param: Ignore the following Parameters (RegEx)", "")
     val followRedirectSetting: Boolean by settingsManager.booleanSetting("Every Param: Follow Redirects?", false)
+//    val rankAndSendToOrganizer: Boolean by settingsManager.booleanSetting("Every Param: Rank and send to Organizer?", true)
 
 
 //    val varExtInjVar1SearchEnabled: Boolean by settingsManager.booleanSetting("VarExtInj: Populate {{variable1}} Search Enabled", false)

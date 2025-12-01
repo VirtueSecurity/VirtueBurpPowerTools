@@ -10,6 +10,7 @@ import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component
 import javax.swing.JMenuItem
 import burp.api.montoya.core.Annotations
+import com.nickcoblentz.montoya.EveryParameter
 import java.awt.Font
 import javax.swing.JLabel
 import javax.swing.JSeparator
@@ -22,19 +23,21 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     private var logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater & Auto Name")
-    private val sendToOrganizerUniqueURLMenuItem = JMenuItem("Send Unique Verb/URL To Organizer")
-    private val sendToOrganizerUniquePathMenuItem = JMenuItem("Send Unique Verb/Host/Path To Organizer")
+    private val sendToOrganizerUniqueVerbURLMenuItem = JMenuItem("Send Unique Verb/URL To Organizer")
+    private val sendToOrganizerUniqueVerbHostPathMenuItem = JMenuItem("Send Unique Verb/Host/Path To Organizer")
+    private val sendToOrganizerUniqueHostPathMenuItem = JMenuItem("Send Unique Host/Path To Organizer")
+
     private val includeBaseURLInScopeMenuItem = JMenuItem("Add Base URL to Scope")
     private val excludeBaseURLFromScopeMenuItem = JMenuItem("Exclude Base URL from Scope")
     private var requestResponses = emptyList<HttpRequestResponse>()
-    private var organizerCounter = 0
+//    private var organizerCounter = 0
 
     private val label = JLabel("  AutoName").apply {
         isEnabled = false
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueURLMenuItem,sendToOrganizerUniquePathMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem,includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
 
     // Uncomment this section if you wish to use persistent settings and automatic UI Generation from: https://github.com/ncoblentz/BurpMontoyaLibrary
     // Add one or more persistent settings here
@@ -53,8 +56,9 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         // Just a simple hello world to start with
         api.userInterface().registerContextMenuItemsProvider(this)
         sendToRepeaterMenuItem.addActionListener {_ -> sendToRepeater() }
-        sendToOrganizerUniquePathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_PATH) }
-        sendToOrganizerUniqueURLMenuItem.addActionListener {_ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_URL) }
+        sendToOrganizerUniqueVerbHostPathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_METHOD_PATH) }
+        sendToOrganizerUniqueVerbURLMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_METHOD_URL) }
+        sendToOrganizerUniqueHostPathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_PATH) }
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
 
@@ -67,7 +71,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     enum class SendToOrganizerOption {
         NONE,
-        UNIQUE_URL,
+        UNIQUE_METHOD_URL,
+        UNIQUE_METHOD_PATH,
         UNIQUE_PATH
     }
 
@@ -101,16 +106,20 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 //            }
 
             val groupedRequestResponses = when (option) {
-                SendToOrganizerOption.UNIQUE_PATH -> requestResponses.groupBy {
+                SendToOrganizerOption.UNIQUE_METHOD_PATH -> requestResponses.groupBy {
                     "${it.request().method()} ${
                         it.request().pathWithoutQuery()
                     }".lowercase()
                 }
 
-                SendToOrganizerOption.UNIQUE_URL -> requestResponses.groupBy {
+                SendToOrganizerOption.UNIQUE_METHOD_URL -> requestResponses.groupBy {
                     "${it.request().method()} ${
                         it.request().url()
                     }".lowercase()
+                }
+
+                SendToOrganizerOption.UNIQUE_PATH -> requestResponses.groupBy {
+                    it.request().pathWithoutQuery().lowercase()
                 }
 
                 SendToOrganizerOption.NONE -> mapOf("none" to requestResponses)
@@ -123,7 +132,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
                     val rankedRequests = api.utilities().rankingUtils().rank(rqRs)
                     val uniqueRankedRequests = rankedRequests.distinctBy { it.rank() }
                     uniqueRankedRequests.forEach {
-                        val rqRs = it.requestResponse().withAnnotations(Annotations.annotations("Rank: ${it.rank()}"))
+                        val rqRs = enrichWithTestCaseNotes(it.requestResponse().withAnnotations(Annotations.annotations("Rank: ${it.rank()}")))
+
                         api.organizer().sendToOrganizer(rqRs)
                     }
                 }
@@ -159,6 +169,23 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 //            }
 //        }
 //    }
+
+    private fun enrichWithTestCaseNotes(requestResponse : HttpRequestResponse) : HttpRequestResponse {
+        val request = requestResponse.request()
+        if(EveryParameter.requestHasTestCaseFields(request)) {
+            val originalNotes = requestResponse.annotations().notes()
+            val appendNotes = "${EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCaseCategoryHeader,request)} - " +
+                    "${EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCaseNameHeader,request)}: " +
+                    EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCasePayloadHeader,request)
+            return if(originalNotes.isBlank()) {
+                requestResponse.withAnnotations(Annotations.annotations(appendNotes))
+            } else {
+                requestResponse.withAnnotations(Annotations.annotations("$originalNotes $appendNotes"))
+            }
+        }
+
+        return requestResponse
+    }
 
     private fun sendToRepeater() {
         if(requestResponses.isNotEmpty()) {

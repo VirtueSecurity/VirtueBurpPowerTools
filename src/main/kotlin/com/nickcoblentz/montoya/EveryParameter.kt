@@ -1,7 +1,6 @@
 package com.nickcoblentz.montoya
 
 import MyExtensionSettings
-import burp.api.montoya.BurpExtension
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.RedirectionMode
 import burp.api.montoya.http.RequestOptions
@@ -15,13 +14,8 @@ import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
-import burp.api.montoya.ui.settings.SettingsPanelBuilder
-import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import burp.api.montoya.utilities.Base64EncodingOptions
-import com.nickcoblentz.montoya.sendRequestWithUpdatedContentLength
 import com.nickcoblentz.montoya.settings.*
-import com.nickcoblentz.montoya.withUpdatedContentLength
-import com.nickcoblentz.montoya.withUpdatedParsedParameterValue
 import pathSlices
 import replacePathSlice
 import java.awt.Component
@@ -32,6 +26,7 @@ import javax.swing.JLabel
 import javax.swing.JMenu
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
+import kotlin.io.encoding.Base64
 
 
 class EveryParameter(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ContextMenuItemsProvider {
@@ -92,19 +87,54 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
-    val testCaseNameHeader = "Z-Test-Case-Name"
-    val testCasePayloadHeader = "Z-Test-Case-Payload"
-    val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
-    val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
+
 
 
     companion object {
-        private const val PLUGIN_NAME: String = "Every Parameter"
-        private const val testCaseCategoryHeader = "Z-Test-Case-Category"
-        private const val testCaseNameHeader = "Z-Test-Case-Name"
-        private const val testCasePayloadHeader = "Z-Test-Case-Payload"
-        private const val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
-        private const val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
+        const val PLUGIN_NAME: String = "Every Parameter"
+        const val testCaseCategoryHeader = "Z-Test-Case-Category"
+        const val testCaseNameHeader = "Z-Test-Case-Name"
+        const val testCasePayloadHeader = "Z-Test-Case-Payload"
+        const val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
+        const val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
+        const val BAMBDA_CATEGORY="id: 138442cc-d174-4feb-9690-aa5eb89b9043\n" +
+                "name: Test Case Category\n" +
+                "function: CUSTOM_COLUMN\n" +
+                "location: LOGGER\n" +
+                "source: \"var headerName = \\\"Z-Test-Case-Category\\\";\\r\\nvar request = requestResponse.request();\\r\\\n" +
+                "  \\nif(request.hasHeader(headerName)) {\\r\\n    return utilities().base64Utils().decode(request.headerValue(headerName));\\r\\\n" +
+                "  \\n}\\r\\nreturn \\\"\\\";\""
+
+        const val BAMBDA_NAME="id: 8e78a316-3cf7-49be-a13c-f8f17fd5b002\n" +
+                "name: Test Case Name\n" +
+                "function: CUSTOM_COLUMN\n" +
+                "location: LOGGER\n" +
+                "source: |-\n" +
+                "  var headerName = \"Z-Test-Case-Name\";\n" +
+                "  var request = requestResponse.request();\n" +
+                "  if(request.hasHeader(headerName)) {\n" +
+                "      return utilities().base64Utils().decode(request.headerValue(headerName));\n" +
+                "  }\n" +
+                "  return \"\";"
+        const val BAMBDA_PAYLOAD="id: f08b766b-8a7f-412e-bc4a-37d9ca026d31\n" +
+                "name: Test Case Payload\n" +
+                "function: CUSTOM_COLUMN\n" +
+                "location: LOGGER\n" +
+                "source: \"var headerName = \\\"Z-Test-Case-Payload\\\";\\r\\nvar request = requestResponse.request();\\r\\\n" +
+                "  \\nif(request.hasHeader(headerName)) {\\r\\n    return utilities().base64Utils().decode(request.headerValue(headerName));\\r\\\n" +
+                "  \\n}\\r\\nreturn \\\"\\\";\""
+
+
+        fun requestHasTestCaseFields(request : HttpRequest) = request.hasHeader(testCaseCategoryHeader) && request.hasHeader(testCaseNameHeader) && request.hasHeader(testCasePayloadHeader)
+                && request.hasHeader(testCaseGrepStartHeader) && request.hasHeader(testCaseGrepEndHeader)
+
+        fun extractTestCaseFieldFromRequest(field : String, request : HttpRequest) : String {
+            if(request.hasHeader(field)) {
+                val decodedBytes = Base64.decode(request.headerValue(field))
+                return String(decodedBytes, Charsets.UTF_8)
+            }
+            return ""
+        }
     }
 
     init {
@@ -132,6 +162,10 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
         dnsOverHTTPMenuItem.addActionListener { e-> dnsOverHTTPActionPerformed(e)}
         maxForwardsMenuItem.addActionListener { e-> maxForwardsActionPerformed(e)}
         authorizationTestsMenuItem.addActionListener { e -> authorizationTestsActionPerformed(e) }
+
+        api.bambda().importBambda(BAMBDA_CATEGORY)
+        api.bambda().importBambda(BAMBDA_NAME)
+        api.bambda().importBambda(BAMBDA_PAYLOAD)
 
         logger.debugLog("...Finished Every Param")
     }
@@ -163,33 +197,83 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
         val category = "Authorization"
         val myHttpRequestResponses = currentHttpRequestResponseList.toList()
 
-        myHttpRequestResponses.forEach {
+        myHttpRequestResponses.forEach { testCaseRequestResponse ->
             executor.submit {
                 val responses = mutableListOf<HttpRequestResponse>()
                 val testCases = mutableListOf(
-                    labelTestCase(it.request(),category,"Original","","","")
+                    labelTestCase(testCaseRequestResponse.request(),category,"Original","","","")
                 )
-                it.request().pathSlices().forEach { slice ->
-                    val test = it.request().replacePathSlice(slice,slice.value.map { char ->
-                    if (char.isUpperCase()) char.lowercaseChar() else char.uppercaseChar()
-                        }.joinToString(""))
-                    testCases.add(test)
+                testCaseRequestResponse.request().pathSlices().forEach { slice ->
+                    val slicesTestCaseRequest = testCaseRequestResponse.request().replacePathSlice(slice,invertCapitalization(slice.value))
+
+                    testCases.add(labelTestCase(slicesTestCaseRequest,category,"Change Capitalization on Slices", slice.value,"",""))
                 }
+
+                val testcasemethod = testCaseRequestResponse.request().withMethod(invertCapitalization(testCaseRequestResponse.request().method()))
+                testCases.add(labelTestCase(testcasemethod,category,"Invert Method Capitalization", testcasemethod.method(),"",""))
+
+                val pathWordList=listOf("",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
+                pathWordList.forEach { prefix ->
+                    var payloads = listOf(
+                        "/$prefix/..${testCaseRequestResponse.request().path()}",
+                        "//$prefix/..${testCaseRequestResponse.request().path()}",
+                        "/$prefix/%2e%2e${testCaseRequestResponse.request().path()}",
+                        "/$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                        "%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                        "%2f%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                        "./${testCaseRequestResponse.request().path()}",
+                        "%2e%2f${testCaseRequestResponse.request().path()}",
+                        "./$prefix/..${testCaseRequestResponse.request().path()}",
+                        "%2e%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                    )
+
+                    payloads.forEach { payload ->
+                        var prefixTestCase = testCaseRequestResponse.request().withPath(payload)
+                        testCases.add(labelTestCase(prefixTestCase,category,"Use Static Dir with dot dot slash", payload,"",""))
+                    }
+                }
+
+                val headerList=listOf(
+                    "X-Rewrite-Url",
+                    "X-Original-Url"
+                )
+
+                headerList.forEach { headerName ->
+                    var payload = testCaseRequestResponse.request().pathWithoutQuery()
+                    var headerTestCase = testCaseRequestResponse.request().withAddedHeader(headerName,payload).withPath("/")
+                    testCases.add(labelTestCase(headerTestCase,category,"Use Headers To Change URL", "$headerName: $payload","",""))
+                }
+
                 testCases.forEach {
                     val response = sendRequestConsiderSettings(it)
                     responses.add(response)
                 }
 
-
+//                if(myExtensionSettings.rankAndSendToOrganizer) {
+//                    responses.groupBy { resp -> "${resp.request().method()} ${resp.request().pathWithoutQuery()}".lowercase()  }
+//                        .forEach { (group, rqRs) ->
+//                            val rankedRequests = api.utilities().rankingUtils().rank(rqRs)
+//                            val uniqueRankedRequests = rankedRequests.distinctBy { it.rank() }
+//                            uniqueRankedRequests.forEach {
+//                                val rqRs = it.requestResponse().withAnnotations(Annotations.annotations("Rank: ${it.rank()}"))
+//                                api.organizer().sendToOrganizer(rqRs)
+//                            }
+//                        }
+//
+//                }
             }
         }
         logger.debugLog("Exit")
     }
 
+    private fun invertCapitalization(text : String) = text.map { char ->
+        if (char.isUpperCase()) char.lowercaseChar() else char.uppercaseChar()
+    }.joinToString("")
+
 
 
     private fun labelTestCase(request : HttpRequest, category: String, name: String, payload: String, grepStart: String, grepEnd: String) : HttpRequest {
-        return request.withAddedHeader(testCaseGrepEndHeader,api.utilities().base64Utils().encodeToString(category))
+        return request.withAddedHeader(testCaseCategoryHeader,api.utilities().base64Utils().encodeToString(category))
             .withAddedHeader(testCaseNameHeader,api.utilities().base64Utils().encodeToString(name))
             .withAddedHeader(testCasePayloadHeader,api.utilities().base64Utils().encodeToString(payload))
             .withAddedHeader(testCaseGrepStartHeader,api.utilities().base64Utils().encodeToString(grepStart))
