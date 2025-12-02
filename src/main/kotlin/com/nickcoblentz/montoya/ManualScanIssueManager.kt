@@ -1,7 +1,9 @@
 package com.nickcoblentz.montoya
 
+import MyExtensionSettings
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.message.HttpRequestResponse
+import burp.api.montoya.persistence.PersistedList
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
@@ -29,8 +31,9 @@ import javax.swing.JSeparator
 import javax.swing.JTextField
 import javax.swing.SwingUtilities
 import javax.swing.border.EmptyBorder
+import kotlin.jvm.optionals.getOrNull
 
-class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProvider {
+class ManualScanIssueManager(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ContextMenuItemsProvider {
 
     companion object {
         const val PLUGIN_NAME: String = "Manual Scan Issue Manager"
@@ -47,9 +50,17 @@ class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProv
         "Other"
     )
 
-    val labels = mutableSetOf<String>()
+    //val labels = mutableSetOf<String>()
+    val labelSettingKey = "LABELS"
+    val labelsSetting = if(api.persistence().extensionData().stringListKeys().contains(labelSettingKey)) {
+        api.persistence().extensionData().getStringList(labelSettingKey)
+    }
+    else {
+        PersistedList.persistedStringList()
+    }
 
-    val existingIssues : MutableMap<String, MutableList<AuditIssue>> = categories.associateWith { mutableListOf<AuditIssue>() }.toMutableMap()
+
+//    val existingIssues : MutableMap<String, MutableList<AuditIssue>> = categories.associateWith { mutableListOf<AuditIssue>() }.toMutableMap()
     val menuItem = JMenuItem("Log Manual Scan Issue")
 
     val label = JLabel("  Manual Issue").apply {
@@ -72,16 +83,21 @@ class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProv
         menuItem.addActionListener {
             showIssueDialog()
         }
+
+        val labelsSetting = PersistedList.persistedStringList()
+
+
         logger.debugLog("Finished loading ${PLUGIN_NAME}...")
     }
 
+
     override fun provideMenuItems(event: ContextMenuEvent?): MutableList<Component> {
         event?.let { event ->
-            selectedRequests = if(event.selectedRequestResponses()!=null) {
+            selectedRequests = if(event.selectedRequestResponses()!=null && !event.selectedRequestResponses().isEmpty()) {
                 logger.debugLog("Found selected request: ${event.selectedRequestResponses().count()}")
                 event.selectedRequestResponses()
             }
-            else if(event.messageEditorRequestResponse() != null && !event.messageEditorRequestResponse().isEmpty) {
+            else if(event.messageEditorRequestResponse().getOrNull()!=null) {
                 logger.debugLog("found message editor RqRs")
                 mutableListOf(event.messageEditorRequestResponse().get().requestResponse())
             }
@@ -143,7 +159,7 @@ class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProv
         // Existing Label Dropdown
         val existingLabelPanel = JPanel(FlowLayout(FlowLayout.LEFT))
         existingLabelPanel.add(JLabel("Select Existing:"))
-        val existingLabelCombo = JComboBox(labels.toTypedArray())
+        val existingLabelCombo = JComboBox(labelsSetting.toTypedArray())
         existingLabelCombo.isEnabled = false
         existingLabelPanel.add(existingLabelCombo)
         formPanel.add(existingLabelPanel)
@@ -183,7 +199,7 @@ class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProv
                     return@addActionListener
                 }
                 else {
-                    labels.add(label)
+                    labelsSetting.add(label)
                 }
             } else {
                 label = existingLabelCombo.selectedItem as? String ?: ""
@@ -226,14 +242,19 @@ class ManualScanIssueManager(private val api: MontoyaApi) : ContextMenuItemsProv
             )
 
             api.siteMap().add(auditIssue)
+
+            val distinct = labelsSetting.distinct()
+            labelsSetting.clear()
+            labelsSetting.addAll(distinct)
+            api.persistence().extensionData().setStringList(labelSettingKey,labelsSetting)
         }
     }
 
     private fun updateExistingLabels(categoryCombo: JComboBox<String>, existingLabelCombo: JComboBox<String>) {
 
         existingLabelCombo.removeAllItems()
-        if (labels.isNotEmpty()) {
-            for (label in labels) {
+        if (labelsSetting.isNotEmpty()) {
+            for (label in labelsSetting) {
                 existingLabelCombo.addItem(label)
             }
         }

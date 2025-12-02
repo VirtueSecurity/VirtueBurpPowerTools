@@ -212,7 +212,7 @@ class EveryParameter(private val api: MontoyaApi, private val myExtensionSetting
                 val testcasemethod = testCaseRequestResponse.request().withMethod(invertCapitalization(testCaseRequestResponse.request().method()))
                 testCases.add(labelTestCase(testcasemethod,category,"Invert Method Capitalization", testcasemethod.method(),"",""))
 
-                val pathWordList=listOf("",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
+                val pathWordList=listOf("","#","#/",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
                 pathWordList.forEach { prefix ->
                     var payloads = listOf(
                         "/$prefix/..${testCaseRequestResponse.request().path()}",

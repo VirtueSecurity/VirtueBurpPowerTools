@@ -7,13 +7,18 @@ import burp.api.montoya.ui.contextmenu.*
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component
+import java.awt.Dimension
 import java.awt.Font
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
 import java.util.*
 import javax.swing.JLabel
 import javax.swing.JMenuItem
+import javax.swing.JOptionPane
+import javax.swing.JScrollPane
 import javax.swing.JSeparator
+import javax.swing.JTextArea
+import javax.swing.SwingUtilities
 
 class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, private val _copyHandler: CopyRequestResponseHandler) : ContextMenuItemsProvider, ActionListener {
     private val _MenuItemList: List<Component>
@@ -33,6 +38,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
     private val _CopyURLAndResponseHeaderIncludeName = "URL, Rs Header (incl. all)"
     private val _CopyResponseBodyOnlyName = "Rs Body Only"
 
+
     private val _CopyRequestAndResponseJMenuItem = JMenuItem(_CopyRequestAndResponseName)
     private val _CopyRequestAndResponseHeaderJMenuItem = JMenuItem(_CopyRequestAndResponseHeaderName)
     private val _CopyURLAndResponseJMenuItem = JMenuItem(_CopyURLAndResponseName)
@@ -40,7 +46,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
     private val _CopyRequestAndResponseIncludeJMenuItem = JMenuItem(_CopyRequestAndResponseIncludeName)
     private val _CopyURLAndResponseHeaderIncludeJMenuItem = JMenuItem(_CopyURLAndResponseHeaderIncludeName)
     private val _CopyResponseBodyOnlyJMenuItem = JMenuItem(_CopyResponseBodyOnlyName)
-
+    private val _SearchAndExtractJmenuItem = JMenuItem("Search and Extract")
 
     var logger: MontoyaLogger = MontoyaLogger(_api, LogLevel.DEBUG)
 
@@ -52,6 +58,11 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         _CopyRequestAndResponseIncludeJMenuItem.addActionListener(this)
         _CopyURLAndResponseHeaderIncludeJMenuItem.addActionListener(this)
         _CopyResponseBodyOnlyJMenuItem.addActionListener(this)
+
+        _SearchAndExtractJmenuItem.addActionListener{ e->
+            searchAndExtractAction(e)
+        }
+
         val label = JLabel("  Copy")
         label.isEnabled = false
         label.font = label.font.deriveFont(Font.BOLD)
@@ -64,6 +75,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
             _CopyRequestAndResponseIncludeJMenuItem,
             _CopyURLAndResponseHeaderIncludeJMenuItem,
             _CopyResponseBodyOnlyJMenuItem,
+            _SearchAndExtractJmenuItem,
             JSeparator())
     }
 
@@ -94,7 +106,100 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         return emptyList<Component>()
     }
 
+    private fun searchAndExtractAction(e: ActionEvent) {
+
+        SwingUtilities.invokeLater {
+            val regexInput = JOptionPane.showInputDialog(
+                _api.userInterface().swingUtils().suiteFrame(),
+                "Enter Regular Expression (e.g., 'Authorization: (.*)'):",
+                "Regex Extractor",
+                JOptionPane.QUESTION_MESSAGE
+            )
+
+            if (!regexInput.isNullOrEmpty()) {
+                processSearchAndExtract(e, regexInput)
+            }
+        }
+    }
+
+    private fun processSearchAndExtract(e: ActionEvent, regexInput: String) {
+        Thread.ofVirtual().start {
+            val selectedRequestResponses = if (currentEventType == _EventTypeHTTP) {
+                if (currentEvent?.selectedRequestResponses()?.isNotEmpty() ?: false) {
+                    currentEvent!!.selectedRequestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) }
+                } else if (currentEvent!!.messageEditorRequestResponse().isPresent) {
+                    listOf(currentEvent!!.messageEditorRequestResponse().get().requestResponse().request().toString(),currentEvent!!.messageEditorRequestResponse().get().requestResponse().response().toString())
+                } else {
+                    listOf<String>()
+                }
+            } else if (currentEventType == _EventTypeWS) {
+                if (currentWSEvent?.selectedWebSocketMessages()?.isNotEmpty() ?: false) {
+                    currentWSEvent!!.selectedWebSocketMessages().map { it -> it.payload().toString() }
+                } else if (currentWSEvent?.messageEditorWebSocket()?.isPresent ?: false) {
+                    mutableListOf(currentWSEvent!!.messageEditorWebSocket().get().webSocketMessage().payload().toString())
+                } else {
+                    mutableListOf<String>()
+                }
+            } else {
+                currentAuditEvent?.let { event ->
+                    event.selectedIssues().flatMap { it.requestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) } }
+                }
+            }
+
+            val regex = regexInput.toRegex()
+            val sb = StringBuilder()
+            var matchCount = 0
+            selectedRequestResponses?.forEach { item ->
+                // Convert request body/headers to string
+
+                // Find all matches in the request
+                val matches = regex.findAll(item)
+
+                if (matches.any()) {
+                    matches.forEach { matchResult ->
+                        matchCount++
+//                        sb.append("Full Match: \"${matchResult.value}\"\n")
+
+                        // Iterate over capture groups (Group 0 is full match, so we skip it to show specific groups)
+                        if (matchResult.groupValues.size > 1) {
+                            matchResult.groupValues.forEachIndexed { index, groupVal ->
+                                if (index > 0) { // Skip group 0 (the whole match)
+                                    sb.append(groupVal+"\n")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Show results back on the Event Dispatch Thread
+            SwingUtilities.invokeLater {
+                if (sb.isNotEmpty()) {
+                    displayResults(sb.toString(),matchCount)
+                } else {
+                    JOptionPane.showMessageDialog(null, "No matches found for regex: $regexInput")
+                }
+            }
+        }
+    }
+
+    private fun displayResults(results: String, count: Int) {
+        val textArea = JTextArea(results)
+        textArea.isEditable = false
+
+        val scrollPane = JScrollPane(textArea)
+        scrollPane.preferredSize = Dimension(600, 400)
+
+        JOptionPane.showMessageDialog(
+            _api.userInterface().swingUtils().suiteFrame(),
+            scrollPane,
+            "Extraction Results ($count matches)",
+            JOptionPane.INFORMATION_MESSAGE
+        )
+    }
+
     override fun actionPerformed(e: ActionEvent) {
+
         if (currentEventType == _EventTypeWS) {
             handleWSEvent(e)
         }

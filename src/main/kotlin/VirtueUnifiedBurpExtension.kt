@@ -45,7 +45,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         CopyRequestResponse(api)
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
         DisposableEmailScanChecker(api)
-        ManualScanIssueManager(api)
+        ManualScanIssueManager(api,projectSettings)
 //        VariableExtractInjectExtension(api, projectSettings)
 
 
@@ -142,6 +142,7 @@ class MyExtensionSettings {
 
     val passiveSetting: Boolean by settingsManager.booleanSetting("SessionAccessToken: Use Passively For All Requests?", false)
     val shouldIgnoreEndpointsSetting: Boolean by settingsManager.booleanSetting("SessionAccessToken: Should Ignore Endpoints?", false)
+
 
     val settingsPanel = settingsManager.buildSettingsPanel()
 
