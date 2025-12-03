@@ -146,7 +146,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
                 }
             }
 
-            val regex = regexInput.toRegex()
+            val regex = regexInput.toRegex(setOf(RegexOption.IGNORE_CASE,RegexOption.MULTILINE))
             val sb = StringBuilder()
             var matchCount = 0
             selectedRequestResponses?.forEach { item ->
