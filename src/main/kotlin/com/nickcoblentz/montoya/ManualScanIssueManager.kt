@@ -84,7 +84,8 @@ class ManualScanIssueManager(private val api: MontoyaApi, private val myExtensio
             showIssueDialog()
         }
 
-        val labelsSetting = PersistedList.persistedStringList()
+//        val labelsSetting = PersistedList.persistedStringList()
+
 
 
         logger.debugLog("Finished loading ${PLUGIN_NAME}...")

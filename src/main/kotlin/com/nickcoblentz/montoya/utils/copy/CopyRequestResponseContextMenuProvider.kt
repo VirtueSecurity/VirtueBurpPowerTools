@@ -250,7 +250,6 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
     }
 
     private fun handleHTTPEvent(e: ActionEvent) {
-
         val targetRequestResponses: MutableList<HttpRequestResponse>
         if (!currentEvent!!.selectedRequestResponses().isEmpty()) {
             targetRequestResponses = currentEvent!!.selectedRequestResponses()

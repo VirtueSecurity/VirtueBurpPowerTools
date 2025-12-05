@@ -9,6 +9,7 @@ import com.nickcoblentz.montoya.ManualScanIssueManager
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utilities.RetryRequestsMontoya
 import com.nickcoblentz.montoya.utils.CopyRequestResponse
+import com.nickcoblentz.montoya.websocket.MontoyaWSUtils
 
 
 // Montoya API Documentation: https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html
@@ -46,6 +47,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
         DisposableEmailScanChecker(api)
         ManualScanIssueManager(api,projectSettings)
+        MontoyaWSUtils(api,projectSettings)
 //        VariableExtractInjectExtension(api, projectSettings)
 
 
@@ -143,6 +145,11 @@ class MyExtensionSettings {
     val passiveSetting: Boolean by settingsManager.booleanSetting("SessionAccessToken: Use Passively For All Requests?", false)
     val shouldIgnoreEndpointsSetting: Boolean by settingsManager.booleanSetting("SessionAccessToken: Should Ignore Endpoints?", false)
 
+
+    val wsRequestLimit: Int by settingsManager.integerSetting("WS Utils: Limit the number of WebSocket messages sent at one time to",
+        MontoyaWSUtils.DEFAULT_WS_REQUEST_LIMIT)
+
+    val wsBumpWSConnection: Boolean by settingsManager.booleanSetting("WS Utils: Automatically Reconnect to Next WS Connection Matching Upgrade Request", false)
 
     val settingsPanel = settingsManager.buildSettingsPanel()
 
