@@ -9,14 +9,12 @@ import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
 import burp.api.montoya.ui.contextmenu.WebSocketMessage
+import burp.api.montoya.ui.hotkey.HotKey
 import burp.api.montoya.ui.hotkey.HotKeyEvent
-import burp.api.montoya.ui.hotkey.HotKeyHandler
 import java.awt.Component
 import java.awt.Font
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
-import java.awt.event.ActionEvent
-import java.awt.event.ActionListener
 import java.net.URI
 import javax.swing.JLabel
 import javax.swing.JMenuItem
@@ -75,10 +73,10 @@ class RetryRequestsContextMenuProvider(
 
     init {
         // Use lambdas for distinct action handlers per menu item
-        _RetryRequestJMenu.addActionListener { retrySelectedRequests() }
-        _RetryVerbsJMenu.addActionListener { retryVerbs(contentLength = false, json = false) }
-        _RetryVerbsCLJMenu.addActionListener { retryVerbs(contentLength = true, json = false) }
-        _RetryVerbsCLJSONJMenu.addActionListener { retryVerbs(contentLength = true, json = true) }
+        _RetryRequestJMenu.addActionListener { retrySelectedRequests(requestResponsesFromEvent(_Event)) }
+        _RetryVerbsJMenu.addActionListener { retryVerbs(requestResponsesFromEvent(_Event),contentLength = false, json = false) }
+        _RetryVerbsCLJMenu.addActionListener { retryVerbs(requestResponsesFromEvent(_Event),contentLength = true, json = false) }
+        _RetryVerbsCLJSONJMenu.addActionListener { retryVerbs(requestResponsesFromEvent(_Event),contentLength = true, json = true) }
         _RetryWSJMenu.addActionListener { retryWebSockets() }
         _RequestURLsFromClipboard.addActionListener { requestURLsFromClipboard() }
 
@@ -90,8 +88,12 @@ class RetryRequestsContextMenuProvider(
         label.isEnabled = false
         label.font = label.font.deriveFont(Font.BOLD)
 
-        _MenuItemList = mutableListOf(label,_RetryRequestJMenu,_RetryVerbsJMenu,_RetryVerbsCLJMenu,_RetryVerbsCLJSONJMenu,_ListOpenWSJMenu,
-            JSeparator())
+        _MenuItemList = mutableListOf(label,_RetryRequestJMenu,_RetryVerbsJMenu,_RetryVerbsCLJMenu,_RetryVerbsCLJSONJMenu,_ListOpenWSJMenu,JSeparator())
+
+        api.userInterface().registerHotKeyHandler(HotKey.hotKey("Retry Requests","Ctrl+Shift+E")) { event ->
+            val requestResponses = requestResponsesFromEvent(event)
+            retrySelectedRequests(requestResponses)
+        }
 
     }
 
@@ -136,8 +138,8 @@ class RetryRequestsContextMenuProvider(
         return emptyList()
     }
 
-    private fun retrySelectedRequests() {
-        val requestResponses = requestResponseFromEvent()
+    private fun retrySelectedRequests(requestResponses: List<HttpRequestResponse>) {
+
         for (requestResponse in requestResponses) {
             myExecutor.runTask(RetryRequestsTask(api, requestResponse.request()))
         }
@@ -170,8 +172,8 @@ class RetryRequestsContextMenuProvider(
         }
     }
 
-    private fun retryVerbs(contentLength: Boolean, json: Boolean) {
-        val requestResponses = requestResponseFromEvent()
+    private fun retryVerbs(requestResponses: List<HttpRequestResponse>,contentLength: Boolean, json: Boolean) {
+
         for (requestResponse in requestResponses) {
             for (verb in _Verbs) {
                 var newRequestResponse = requestResponse
@@ -226,20 +228,49 @@ class RetryRequestsContextMenuProvider(
         }
     }
 
-    private fun requestResponseFromEvent() : List<HttpRequestResponse> {
-        var result: MutableList<HttpRequestResponse> = ArrayList()
-        _Event?.let {
-            if (!it.selectedRequestResponses().isEmpty()) {
-                result = it.selectedRequestResponses()
-            } else if (it.messageEditorRequestResponse().isPresent && !it.messageEditorRequestResponse().isEmpty) {
-                if (it.messageEditorRequestResponse().get().requestResponse().request() != null) {
-                    result.add(it.messageEditorRequestResponse().get().requestResponse())
-                    return result
-                }
-            }
+    // Combined logic helper used by overloaded requestResponses() functions
+    private fun extractRequestResponses(
+        hasSelected: () -> Boolean,
+        selectedProvider: () -> MutableList<HttpRequestResponse>,
+        editorIsPresent: () -> Boolean,
+        editorIsEmpty: () -> Boolean,
+        editorRequestResponseProvider: () -> HttpRequestResponse?
+    ): List<HttpRequestResponse> {
+        if (hasSelected()) {
+            return selectedProvider()
         }
 
-        return result
+        if (editorIsPresent() && !editorIsEmpty()) {
+            val rr = editorRequestResponseProvider()
+            if (rr != null && rr.request() != null) {
+                return mutableListOf(rr)
+            }
+        }
+        return emptyList()
+    }
+
+    // Overload for ContextMenuEvent (nullable to match field usage)
+    private fun requestResponsesFromEvent(event: ContextMenuEvent?): List<HttpRequestResponse> {
+        if (event == null) return emptyList()
+        return extractRequestResponses(
+            hasSelected = { !event.selectedRequestResponses().isEmpty() },
+            selectedProvider = { event.selectedRequestResponses() },
+            editorIsPresent = { event.messageEditorRequestResponse().isPresent },
+            editorIsEmpty = { event.messageEditorRequestResponse().isEmpty },
+            editorRequestResponseProvider = { event.messageEditorRequestResponse().get().requestResponse() }
+        )
+    }
+
+    // Overload for HotKeyEvent (kept for future hotkey handler wiring)
+    private fun requestResponsesFromEvent(event: HotKeyEvent?): List<HttpRequestResponse> {
+        if (event == null) return emptyList()
+        return extractRequestResponses(
+            hasSelected = { !event.selectedRequestResponses().isEmpty() },
+            selectedProvider = { event.selectedRequestResponses() },
+            editorIsPresent = { event.messageEditorRequestResponse().isPresent },
+            editorIsEmpty = { event.messageEditorRequestResponse().isEmpty },
+            editorRequestResponseProvider = { event.messageEditorRequestResponse().get().requestResponse() }
+        )
     }
 
     /**
