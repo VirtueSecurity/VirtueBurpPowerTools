@@ -9,7 +9,16 @@ class CopyRequestResponseHotKeyProvider(private val _api : MontoyaApi, private v
 
     override fun handle(event: HotKeyEvent?) {
         event?.let {
-            if(it.messageEditorRequestResponse().isPresent) {
+            if(it.selectedRequestResponses().isNotEmpty()) {
+                val copyMe = buildString {
+
+                    it.selectedRequestResponses().forEach { reqRes->
+                        append(_copyHandler.copyItem(reqRes, _stripHeaders, _copyMode))
+                    }
+                }
+                _copyHandler.copyToClipboard(copyMe)
+            }
+            else if(it.messageEditorRequestResponse().isPresent) {
                 val requestResponse = it.messageEditorRequestResponse().get()
                 _copyHandler.copyToClipboard(
                     _copyHandler.copyItem(requestResponse.requestResponse(), _stripHeaders, _copyMode)

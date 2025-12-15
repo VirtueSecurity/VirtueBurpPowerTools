@@ -2,6 +2,7 @@ package com.nickcoblentz.montoya.utils
 
 import burp.api.montoya.BurpExtension
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.ui.hotkey.HotKey
 import burp.api.montoya.ui.hotkey.HotKeyContext
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
@@ -18,13 +19,12 @@ class CopyRequestResponse(api: MontoyaApi) {
         _copyHandler = CopyRequestResponseHandler(api)
         api.userInterface().registerContextMenuItemsProvider(CopyRequestResponseContextMenuProvider(api,_copyHandler))
         api.userInterface().registerHotKeyHandler(
-            HotKeyContext.HTTP_MESSAGE_EDITOR,
-            "Ctrl+Shift+C",
+            HotKey.hotKey("Copy Full Request/Response","Ctrl+Shift+C"),
             CopyRequestResponseHotKeyProvider(api,true,CopyRequestResponseHandler.CopyMode.RequestFullResponseFull))
-        api.userInterface().registerHotKeyHandler(
-            HotKeyContext.HTTP_MESSAGE_EDITOR,
-            "Ctrl+Alt+C",
-            CopyRequestResponseHotKeyProvider(api,true,CopyRequestResponseHandler.CopyMode.RequestFullResponseHeaders))
+//        api.userInterface().registerHotKeyHandler(
+//            HotKeyContext.HTTP_MESSAGE_EDITOR,
+//            "Ctrl+Alt+C",
+//            CopyRequestResponseHotKeyProvider(api,true,CopyRequestResponseHandler.CopyMode.RequestFullResponseHeaders))
         /*api.userInterface().registerHotKeyHandler(
             HotKeyContext.HTTP_MESSAGE_EDITOR,
             "",
