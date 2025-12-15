@@ -2,16 +2,22 @@ package com.nickcoblentz.montoya.utilities
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.message.HttpRequestResponse
+import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.proxy.websocket.ProxyWebSocketCreation
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
 import burp.api.montoya.ui.contextmenu.WebSocketMessage
+import burp.api.montoya.ui.hotkey.HotKeyEvent
+import burp.api.montoya.ui.hotkey.HotKeyHandler
 import java.awt.Component
 import java.awt.Font
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
+import java.net.URI
 import javax.swing.JLabel
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
@@ -20,7 +26,7 @@ class RetryRequestsContextMenuProvider(
     private val api: MontoyaApi, //private List<ProxyWebSocketCreation> proxyWebSockets;
     private val myExecutor: MyExecutor,
     private val proxyWebSockets: MutableList<ProxyWebSocketCreation>
-) : ContextMenuItemsProvider, ActionListener {
+) : ContextMenuItemsProvider/*, HotKeyHandler*/ {
 
     companion object {
         const val RETRY_REQUESTS: String = "RetryRequests"
@@ -28,6 +34,7 @@ class RetryRequestsContextMenuProvider(
         const val RETRY_VERBS_CONTENT_LENGTH: String = "RetryVerbsWContentLength"
         const val RETRY_VERBS_CONTENT_LENGTH_JSON: String = "RetryVerbsWContentLengthJson"
         const val RETRY_WS: String = "Retry WS"
+        const val REQUEST_URLS_FROM_CLIPBOARD = "Request URLs from Clipboard"
     }
 
     private val _Verbs = listOf(
@@ -59,22 +66,21 @@ class RetryRequestsContextMenuProvider(
     private val _RetryVerbsCLJMenu = JMenuItem(RETRY_VERBS_CONTENT_LENGTH)
     private val _RetryVerbsCLJSONJMenu = JMenuItem(RETRY_VERBS_CONTENT_LENGTH_JSON)
     private val _RetryWSJMenu = JMenuItem(RETRY_WS)
+    private val _RequestURLsFromClipboard = JMenuItem(REQUEST_URLS_FROM_CLIPBOARD)
     private var _Event: ContextMenuEvent? = null
     private var _WSEvent : WebSocketContextMenuEvent? = null
     private val _ListOpenWSJMenu = JMenuItem("List Open WS Connections")
+    // Holds the most recently extracted URLs from the system clipboard
+    private var _clipboardRequestUrls: List<String> = emptyList()
 
     init {
-        //this.proxyWebSockets = proxyWebSockets;
-        _RetryRequestJMenu.addActionListener(this)
-        _RetryRequestJMenu.actionCommand = RETRY_REQUESTS
-        _RetryVerbsJMenu.addActionListener(this)
-        _RetryVerbsJMenu.actionCommand = RETRY_VERBS
-        _RetryVerbsCLJMenu.addActionListener(this)
-        _RetryVerbsCLJMenu.actionCommand = RETRY_VERBS_CONTENT_LENGTH
-        _RetryVerbsCLJSONJMenu.addActionListener(this)
-        _RetryVerbsCLJSONJMenu.actionCommand = RETRY_VERBS_CONTENT_LENGTH_JSON
-        _RetryWSJMenu.addActionListener(this)
-        _RetryWSJMenu.actionCommand = RETRY_WS
+        // Use lambdas for distinct action handlers per menu item
+        _RetryRequestJMenu.addActionListener { retrySelectedRequests() }
+        _RetryVerbsJMenu.addActionListener { retryVerbs(contentLength = false, json = false) }
+        _RetryVerbsCLJMenu.addActionListener { retryVerbs(contentLength = true, json = false) }
+        _RetryVerbsCLJSONJMenu.addActionListener { retryVerbs(contentLength = true, json = true) }
+        _RetryWSJMenu.addActionListener { retryWebSockets() }
+        _RequestURLsFromClipboard.addActionListener { requestURLsFromClipboard() }
 
         _ListOpenWSJMenu.addActionListener {
             listOpenWSConnections()
@@ -86,7 +92,6 @@ class RetryRequestsContextMenuProvider(
 
         _MenuItemList = mutableListOf(label,_RetryRequestJMenu,_RetryVerbsJMenu,_RetryVerbsCLJMenu,_RetryVerbsCLJSONJMenu,_ListOpenWSJMenu,
             JSeparator())
-
 
     }
 
@@ -101,13 +106,22 @@ class RetryRequestsContextMenuProvider(
     override fun provideMenuItems(event: ContextMenuEvent): List<Component> {
         _Event = event
 
-        if (!event.selectedRequestResponses()
+        val menuList = if (!event.selectedRequestResponses()
                 .isEmpty() || (event.messageEditorRequestResponse().isPresent && !event.messageEditorRequestResponse().isEmpty)
         ) {
-            return _MenuItemList
+            _MenuItemList.toMutableList()
+        }
+        else {
+            mutableListOf()
         }
 
-        return emptyList()
+        if(updateRequestUrlsFromClipboard()) {
+            val insertIndex = if(menuList.isEmpty()) 0 else menuList.lastIndex-1
+            menuList.add(insertIndex, _RequestURLsFromClipboard)
+        }
+
+
+        return menuList
     }
 
     override fun provideMenuItems(event: WebSocketContextMenuEvent): List<Component> {
@@ -122,105 +136,175 @@ class RetryRequestsContextMenuProvider(
         return emptyList()
     }
 
-    override fun actionPerformed(actionEvent: ActionEvent) {
+    private fun retrySelectedRequests() {
         val requestResponses = requestResponseFromEvent()
-
-        if (actionEvent.actionCommand == RETRY_REQUESTS) {
-            val count = 1
-            val total = requestResponses.size
-            for (requestResponse in requestResponses) {
-                myExecutor.runTask(RetryRequestsTask(api, requestResponse.request()))
-            }
+        for (requestResponse in requestResponses) {
+            myExecutor.runTask(RetryRequestsTask(api, requestResponse.request()))
         }
-        else if(actionEvent.actionCommand == RETRY_WS)
-        {
-            _WSEvent?.let { wsEvent ->
-                listOpenWSConnections()
-                val webSocketMessages : List<WebSocketMessage> = if(wsEvent.messageEditorWebSocket().isPresent)
+    }
+
+    private fun retryWebSockets() {
+        _WSEvent?.let { wsEvent ->
+            listOpenWSConnections()
+            val webSocketMessages: List<WebSocketMessage> = when {
+                wsEvent.messageEditorWebSocket().isPresent ->
                     listOf(wsEvent.messageEditorWebSocket().get().webSocketMessage())
-                else if(!wsEvent.selectedWebSocketMessages().isEmpty())
+                !wsEvent.selectedWebSocketMessages().isEmpty() ->
                     wsEvent.selectedWebSocketMessages()
-                else
-                    emptyList<WebSocketMessage>()
-
-                if(!webSocketMessages.isEmpty()) {
-                    for(message in webSocketMessages) {
-                        val search = message.upgradeRequest().url().replace(message.upgradeRequest().path(),"")
-                        api.logging().logToOutput("Searching for candidate: ${message.upgradeRequest().url()} using ${search}")
-                        for(proxyMessage in proxyWebSockets) {
-                            if(proxyMessage.upgradeRequest().url().startsWith(search)) {
-                                api.logging().logToOutput("Found candidate: ${proxyMessage.upgradeRequest().url()}")
-                                proxyMessage.proxyWebSocket().sendBinaryMessage(message.payload(),message.direction())
-                                break
-                            }
-                        }
-                    }
-                }
+                else -> emptyList()
             }
-        }
-        else {
-            val total = requestResponses.size * _Verbs.size
-            val count = 1
-            for (requestResponse in requestResponses) {
-                for (verb in _Verbs) {
-                    var newRequestResponse = requestResponse
 
-                    if (actionEvent.actionCommand == RETRY_VERBS_CONTENT_LENGTH || actionEvent.actionCommand == RETRY_VERBS_CONTENT_LENGTH_JSON) {
-                        if (!newRequestResponse.request().hasHeader("Content-Length")) {
-                            newRequestResponse = HttpRequestResponse.httpRequestResponse(
-                                newRequestResponse.request().withAddedHeader("Content-Length", "0"),
-                                newRequestResponse.response()
-                            )
+            if (webSocketMessages.isNotEmpty()) {
+                for (message in webSocketMessages) {
+                    val search = message.upgradeRequest().url().replace(message.upgradeRequest().path(), "")
+                    api.logging().logToOutput("Searching for candidate: ${message.upgradeRequest().url()} using ${search}")
+                    for (proxyMessage in proxyWebSockets) {
+                        if (proxyMessage.upgradeRequest().url().startsWith(search)) {
+                            api.logging().logToOutput("Found candidate: ${proxyMessage.upgradeRequest().url()}")
+                            proxyMessage.proxyWebSocket().sendBinaryMessage(message.payload(), message.direction())
+                            break
                         }
                     }
-
-                    if (actionEvent.actionCommand == RETRY_VERBS_CONTENT_LENGTH_JSON) {
-                        newRequestResponse = if (newRequestResponse.request().hasHeader("Content-Type")) {
-                            HttpRequestResponse.httpRequestResponse(
-                                newRequestResponse.request().withUpdatedHeader("Content-Type", "application/json"),
-                                newRequestResponse.response()
-                            )
-                        } else {
-                            HttpRequestResponse.httpRequestResponse(
-                                newRequestResponse.request().withAddedHeader("Content-Type", "application/json"),
-                                newRequestResponse.response()
-                            )
-                        }
-
-                        if (newRequestResponse.request().bodyToString()
-                                .isEmpty() && !_VerbsNoBody.contains(verb)
-                        ) newRequestResponse = HttpRequestResponse.httpRequestResponse(
-                            newRequestResponse.request().withBody("{}"),
-                            newRequestResponse.response()
-                        )
-                        if (_VerbsNoBody.contains(verb) && !newRequestResponse.request().bodyToString().isEmpty()) {
-                            myExecutor.runTask(RetryRequestsTask(api, newRequestResponse.request().withMethod(verb)))
-                            newRequestResponse = HttpRequestResponse.httpRequestResponse(
-                                newRequestResponse.request().withBody(""),
-                                newRequestResponse.response()
-                            )
-                        }
-                    }
-
-                    myExecutor.runTask(RetryRequestsTask(api, newRequestResponse.request().withMethod(verb)))
                 }
             }
         }
     }
 
-    private fun requestResponseFromEvent() : List<HttpRequestResponse> {
-            var result: MutableList<HttpRequestResponse> = ArrayList()
-            _Event?.let {
-                if (!it.selectedRequestResponses().isEmpty()) {
-                    result = it.selectedRequestResponses()
-                } else if (it.messageEditorRequestResponse().isPresent && !it.messageEditorRequestResponse().isEmpty) {
-                    if (it.messageEditorRequestResponse().get().requestResponse().request() != null) {
-                        result.add(it.messageEditorRequestResponse().get().requestResponse())
-                        return result
+    private fun retryVerbs(contentLength: Boolean, json: Boolean) {
+        val requestResponses = requestResponseFromEvent()
+        for (requestResponse in requestResponses) {
+            for (verb in _Verbs) {
+                var newRequestResponse = requestResponse
+
+                if (contentLength) {
+                    if (!newRequestResponse.request().hasHeader("Content-Length")) {
+                        newRequestResponse = HttpRequestResponse.httpRequestResponse(
+                            newRequestResponse.request().withAddedHeader("Content-Length", "0"),
+                            newRequestResponse.response()
+                        )
                     }
                 }
-            }
 
-            return result
+                if (json) {
+                    newRequestResponse = if (newRequestResponse.request().hasHeader("Content-Type")) {
+                        HttpRequestResponse.httpRequestResponse(
+                            newRequestResponse.request().withUpdatedHeader("Content-Type", "application/json"),
+                            newRequestResponse.response()
+                        )
+                    } else {
+                        HttpRequestResponse.httpRequestResponse(
+                            newRequestResponse.request().withAddedHeader("Content-Type", "application/json"),
+                            newRequestResponse.response()
+                        )
+                    }
+
+                    if (newRequestResponse.request().bodyToString().isEmpty() && !_VerbsNoBody.contains(verb)) {
+                        newRequestResponse = HttpRequestResponse.httpRequestResponse(
+                            newRequestResponse.request().withBody("{}"),
+                            newRequestResponse.response()
+                        )
+                    }
+                    if (_VerbsNoBody.contains(verb) && newRequestResponse.request().bodyToString().isNotEmpty()) {
+                        // Intentionally send once with body, then clear and send again (as per original behavior)
+                        myExecutor.runTask(RetryRequestsTask(api, newRequestResponse.request().withMethod(verb)))
+                        newRequestResponse = HttpRequestResponse.httpRequestResponse(
+                            newRequestResponse.request().withBody(""),
+                            newRequestResponse.response()
+                        )
+                    }
+                }
+
+                myExecutor.runTask(RetryRequestsTask(api, newRequestResponse.request().withMethod(verb)))
+            }
         }
+    }
+
+    private fun requestURLsFromClipboard() {
+        _clipboardRequestUrls.forEach { url ->
+            val request = HttpRequest.httpRequestFromUrl(url)
+            myExecutor.runTask(RetryRequestsTask(api, request))
+        }
+    }
+
+    private fun requestResponseFromEvent() : List<HttpRequestResponse> {
+        var result: MutableList<HttpRequestResponse> = ArrayList()
+        _Event?.let {
+            if (!it.selectedRequestResponses().isEmpty()) {
+                result = it.selectedRequestResponses()
+            } else if (it.messageEditorRequestResponse().isPresent && !it.messageEditorRequestResponse().isEmpty) {
+                if (it.messageEditorRequestResponse().get().requestResponse().request() != null) {
+                    result.add(it.messageEditorRequestResponse().get().requestResponse())
+                    return result
+                }
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * Checks the system clipboard for text content, extracts any http/https URLs,
+     * and stores them into the class instance variable. If no URLs are found or
+     * clipboard is not readable, clears the stored URLs.
+     *
+     * @return the list of URLs currently stored from the clipboard (empty if none)
+     */
+    fun updateRequestUrlsFromClipboard(): Boolean {
+        val urls = try {
+            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+            val data = clipboard.getContents(null)
+            if (data != null && data.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                val text = data.getTransferData(DataFlavor.stringFlavor) as? String ?: ""
+                extractUrls(text)
+            } else {
+                emptyList()
+            }
+        } catch (t: Throwable) {
+            emptyList()
+        }
+
+        _clipboardRequestUrls = urls
+        return _clipboardRequestUrls.isNotEmpty()
+    }
+
+    // Lightweight URL extractor/validator for http/https tokens
+    private fun extractUrls(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        return text
+            .split("\n", "\r", "\t", " ")
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
+            .mapNotNull { candidate ->
+                try {
+                    val uri = URI(candidate)
+                    if ((uri.scheme == "http" || uri.scheme == "https") && !uri.host.isNullOrBlank()) candidate else null
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            .distinct()
+            .toList()
+    }
+
+//    override fun handle(event: HotKeyEvent) {
+//
+//            if(event.selectedRequestResponses().isNotEmpty()) {
+//                val copyMe = buildString {
+//
+//                    event.selectedRequestResponses().forEach { reqRes->
+//                        append(_copyHandler.copyItem(reqRes, _stripHeaders, _copyMode))
+//                    }
+//                }
+//                _copyHandler.copyToClipboard(copyMe)
+//            }
+//            else if(event.messageEditorRequestResponse().isPresent) {
+//                val requestResponse = event.messageEditorRequestResponse().get()
+//                _copyHandler.copyToClipboard(
+//                    _copyHandler.copyItem(requestResponse.requestResponse(), _stripHeaders, _copyMode)
+//                )
+//            }
+//    }
+
+
 }

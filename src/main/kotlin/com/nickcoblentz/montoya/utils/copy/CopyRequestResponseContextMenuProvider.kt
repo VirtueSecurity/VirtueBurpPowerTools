@@ -4,6 +4,7 @@ import burp.api.montoya.MontoyaApi
 
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.ui.contextmenu.*
+import burp.api.montoya.ui.hotkey.HotKeyHandler
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component

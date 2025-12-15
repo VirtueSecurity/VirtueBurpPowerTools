@@ -3,11 +3,14 @@ package com.nickcoblentz.montoya.utilities
 import MyExtensionSettings
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.proxy.websocket.*
+import burp.api.montoya.ui.hotkey.HotKey
 import burp.api.montoya.ui.settings.SettingsPanelBuilder
 import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
+import com.nickcoblentz.montoya.utils.CopyRequestResponseHandler
+import com.nickcoblentz.montoya.utils.CopyRequestResponseHotKeyProvider
 
 class RetryRequestsMontoya(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ProxyWebSocketCreationHandler {
     private var logger: MontoyaLogger = MontoyaLogger(api,LogLevel.DEBUG)
@@ -27,8 +30,13 @@ class RetryRequestsMontoya(private val api: MontoyaApi, private val myExtensionS
 
 
         myExecutor = MyExecutor(api,myExtensionSettings)
-        api.userInterface().registerContextMenuItemsProvider(RetryRequestsContextMenuProvider(api, myExecutor,proxyWebSockets))
+        val retryContenxtMenuProvider = RetryRequestsContextMenuProvider(api, myExecutor,proxyWebSockets)
+        api.userInterface().registerContextMenuItemsProvider(retryContenxtMenuProvider)
         api.proxy().registerWebSocketCreationHandler(this)
+
+//        api.userInterface().registerHotKeyHandler(
+//            HotKey.hotKey("Retry Requests","Ctrl+Shift+E"),retryContenxtMenuProvider
+//            )
 
 
         logger.debugLog("...Finished loading Retry Requests")
