@@ -4,7 +4,7 @@ import burp.api.montoya.core.HighlightColor
 import burp.api.montoya.ui.settings.SettingsPanelBuilder
 import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import com.nickcoblentz.montoya.DisposableEmailScanChecker
-import com.nickcoblentz.montoya.EveryParameter
+import com.nickcoblentz.montoya.EveryParameter2
 import com.nickcoblentz.montoya.ManualScanIssueManager
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utilities.RetryRequestsMontoya
@@ -40,7 +40,8 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         val projectSettings = MyExtensionSettings()
 
         MatchReplaceSessionExtension(api, projectSettings)
-        EveryParameter(api, projectSettings)
+        //EveryParameter(api, projectSettings)
+        EveryParameter2(api, projectSettings)
         KotlinBurpAutoNameRepeaterTabExtension(api, projectSettings)
         RetryRequestsMontoya(api, projectSettings)
         CopyRequestResponse(api)
@@ -99,6 +100,7 @@ class MyExtensionSettings {
 
 
     val ignoreParametersSetting: String by settingsManager.stringSetting("Every Param: Ignore the following Parameters (RegEx)", "")
+    val ignoreHeadersSetting: String by settingsManager.stringSetting("Every Param: Ignore the following Request Headers", "accept,accept-encoding,accept-language,content-length,host,if-modified-since,if-none-match,priority,sec-ch-ua,sec-ch-ua-arch,sec-ch-ua-bitness,sec-ch-ua-full-version,sec-ch-ua-mobile,sec-ch-ua-model,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-wow64,sec-fetch-dest,sec-fetch-mode,sec-fetch-site,sec-fetch-user,upgrade-insecure-requests,x-requested-with")
     val followRedirectSetting: Boolean by settingsManager.booleanSetting("Every Param: Follow Redirects?", false)
 //    val rankAndSendToOrganizer: Boolean by settingsManager.booleanSetting("Every Param: Rank and send to Organizer?", true)
 

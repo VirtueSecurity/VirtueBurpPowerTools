@@ -10,7 +10,7 @@ import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component
 import javax.swing.JMenuItem
 import burp.api.montoya.core.Annotations
-import com.nickcoblentz.montoya.EveryParameter
+import com.nickcoblentz.montoya.EveryParameter2
 import java.awt.Font
 import javax.swing.JLabel
 import javax.swing.JSeparator
@@ -23,6 +23,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     private var logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater & Auto Name")
+    private val sendToOrganizerUniqueMenuItem = JMenuItem("Send Unique To Organizer")
     private val sendToOrganizerUniqueVerbURLMenuItem = JMenuItem("Send Unique Verb/URL To Organizer")
     private val sendToOrganizerUniqueVerbHostPathMenuItem = JMenuItem("Send Unique Verb/Host/Path To Organizer")
     private val sendToOrganizerUniqueHostPathMenuItem = JMenuItem("Send Unique Host/Path To Organizer")
@@ -37,7 +38,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem,includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueMenuItem,sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem,includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
 
     // Uncomment this section if you wish to use persistent settings and automatic UI Generation from: https://github.com/ncoblentz/BurpMontoyaLibrary
     // Add one or more persistent settings here
@@ -59,6 +60,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         sendToOrganizerUniqueVerbHostPathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_METHOD_PATH) }
         sendToOrganizerUniqueVerbURLMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_METHOD_URL) }
         sendToOrganizerUniqueHostPathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_PATH) }
+        sendToOrganizerUniqueMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.NONE) }
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
 
@@ -172,11 +174,11 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
     private fun enrichWithTestCaseNotes(requestResponse : HttpRequestResponse) : HttpRequestResponse {
         val request = requestResponse.request()
-        if(EveryParameter.requestHasTestCaseFields(request)) {
+        if(EveryParameter2.requestHasTestCaseFields(request)) {
             val originalNotes = requestResponse.annotations().notes()
-            val appendNotes = "${EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCaseCategoryHeader,request)} - " +
-                    "${EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCaseNameHeader,request)}: " +
-                    EveryParameter.extractTestCaseFieldFromRequest(EveryParameter.testCasePayloadHeader,request)
+            val appendNotes = "${EveryParameter2.extractTestCaseFieldFromRequest(EveryParameter2.testCaseCategoryHeader,request)} - " +
+                    "${EveryParameter2.extractTestCaseFieldFromRequest(EveryParameter2.testCaseNameHeader,request)}: " +
+                    EveryParameter2.extractTestCaseFieldFromRequest(EveryParameter2.testCasePayloadHeader,request)
             return if(originalNotes.isBlank()) {
                 requestResponse.withAnnotations(Annotations.annotations(appendNotes))
             } else {
