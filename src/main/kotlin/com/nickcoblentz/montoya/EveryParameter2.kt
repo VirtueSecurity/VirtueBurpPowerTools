@@ -49,7 +49,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //    private val log4jCollabMenuItem = JMenuItem("Log4J Collab")
 //    private val maxForwardsMenuItem = JMenuItem("Max-Forwards")
 //    private val minimizeMenuItem = JMenuItem("Minimize")
-//    private val spoofIPMenuItem = JMenuItem("Spoof IP Using Headers")
+    private val spoofIPMenuItem = JMenuItem("Spoof IP Using Headers")
 //    private val dnsOverHTTPMenuItem = JMenuItem("DNS-over-HTTP")
     private val authorizationTestsMenuItem = JMenuItem("Authorization Tests")
 
@@ -72,7 +72,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //            add()
 //            add(maxForwardsMenuItem)
 //            add(log4jCollabMenuItem)
-//            add(spoofIPMenuItem)
+//            add()
 //            add(dnsOverHTTPMenuItem)
 //            add(minimizeMenuItem)
 //        },
@@ -83,6 +83,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         blindXssImgMenuItem,
         xssPayloadsMenuItem,
         collabUrlMenuItem,
+        spoofIPMenuItem,
         xmlOutOfBandMenuItem,
         JSeparator()
     )
@@ -193,7 +194,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        urlPathSpecialCharsMenuItem.addActionListener({ e -> urlPathSpecialCharsActionPerformed(e) })
 //        minimizeMenuItem.addActionListener({ e -> minimizeActionPerformed(e) })
 //        log4jCollabMenuItem.addActionListener({ e -> log4jCollabActionPerformed(e) })
-//        spoofIPMenuItem.addActionListener { e -> spoofIpActionPerformed(e) }
+        spoofIPMenuItem.addActionListener { e -> spoofIpActionPerformed(e) }
 //        dnsOverHTTPMenuItem.addActionListener { e-> dnsOverHTTPActionPerformed(e)}
 //        maxForwardsMenuItem.addActionListener { e-> maxForwardsActionPerformed(e)}
         authorizationTestsMenuItem.addActionListener { e -> authorizationTestsActionPerformed(e) }
@@ -429,6 +430,28 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         logger.debugLog("Exit")
     }
 
+    fun spoofIpActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "Spoof IP Address"
+        val testCaseName = "Spoof IP"
+        val spoofPayloads = listOf("127.0.0.1","0","0.0.0.0","10.0.0.2","192.168.0.2","https://${api.collaborator().defaultPayloadGenerator().generatePayload()}","${api.collaborator().defaultPayloadGenerator().generatePayload()}")
+        val headers = listOf("Host","CF-Connecting-IP","Client-IP","Forwarded","Forwarded-For","Forwarded-For-Ip","From","Front-End-Https","Origin","Referer","True-Client-IP","Via","X-Azure-ClientIP","X-Azure-SocketIP","X-Client-IP","X-Custom-IP-Authorization","X-Forward","X-Forward-For","X-Forwarded","X-Forwarded-By","X-Forwarded-For","X-Forwarded-For-Original","X-Forwarded-Host","X-Forwarded-Proto","X-Forwarded-Server","X-Forwarded-Ssl","X-Forwared-Host","X-Host","X-HTTP-Host-Override","X-Originating-IP","X-ProxyUser-Ip","X-Real-IP","X-Remote-Addr","X-Remote-IP")
+
+        spoofPayloads.forEach { payload ->
+            headers.forEach { header ->
+                myHttpRequestResponses.forEach { myHttpRequestResponse ->
+                    val request = myHttpRequestResponse.request()
+                    val modifiedRequest = request.withRemovedHeader(header).withAddedHeader(header,payload)
+                    sendRequestConsiderSettings(labelTestCase(modifiedRequest,category,testCaseName, ParameterType.HTTP_HEADER.value,header,payload))
+                }
+
+            }
+        }
+
+        logger.debugLog("Exit")
+    }
+
     // endregion
 
     // region Insertion and Labeling
@@ -494,25 +517,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        logger.debugLog("Exit")
 //    }
 //
-//    fun spoofIpActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        val collabGenerator = api.collaborator().defaultPayloadGenerator()
-//
-//        val spoofPayloads = listOf("127.0.0.1","0","0.0.0.0","10.0.0.2","192.168.0.2",collabGenerator.generatePayload().toString())
-//        val headers = listOf("CF-Connecting-IP","Client-IP","Forwarded","Forwarded-For","Forwarded-For-Ip","From","Front-End-Https","Origin","Referer","True-Client-IP","Via","X-Azure-ClientIP","X-Azure-SocketIP","X-Client-IP","X-Custom-IP-Authorization","X-Forward","X-Forward-For","X-Forwarded","X-Forwarded-By","X-Forwarded-For","X-Forwarded-For-Original","X-Forwarded-Host","X-Forwarded-Proto","X-Forwarded-Server","X-Forwarded-Ssl","X-Forwared-Host","X-Host","X-HTTP-Host-Override","X-Originating-IP","X-ProxyUser-Ip","X-Real-IP","X-Remote-Addr","X-Remote-IP")
-//        val justHost = listOf("Host")
-//        for(spoofPayload in spoofPayloads) {
-//            addOrReplacePayloadForHeaders(myHttpRequestResponses,headers,spoofPayload,"Spoof IP: $spoofPayload")
-//            addOrReplacePayloadForHeaders(myHttpRequestResponses,justHost,spoofPayload,"Spoof IP, Host: $spoofPayload")
-//        }
-//
-//        for(httpRequestResponse in myHttpRequestResponses) {
-//            val resolvedIp = httpRequestResponse.httpService().ipAddress()
-//            addOrReplacePayloadForHeaders(listOf(httpRequestResponse),headers,resolvedIp,"Spoof IP, Server IP: $resolvedIp")
-//        }
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun addOrReplacePayloadForHeaders(httpRequestResponses : List<HttpRequestResponse>,headers : List<String>, payload : String, annotation : String) {
 //        logger.debugLog("Enter")
