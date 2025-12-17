@@ -10,18 +10,19 @@ import burp.api.montoya.http.message.params.HttpParameter
 import burp.api.montoya.http.message.params.HttpParameterType
 import burp.api.montoya.http.message.params.ParsedHttpParameter
 import burp.api.montoya.http.message.requests.HttpRequest
-import burp.api.montoya.http.message.responses.HttpResponse
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
+import burp.api.montoya.ui.editor.extension.EditorCreationContext
+import burp.api.montoya.ui.editor.extension.HttpRequestEditorProvider
+import com.nickcoblentz.montoya.utilities.MyExecutor
 import org.apache.commons.text.StringEscapeUtils
 import pathSlices
 import replacePathSlice
 import java.awt.Component
 import java.awt.Font
 import java.awt.event.ActionEvent
-import java.util.concurrent.Executors
 import javax.swing.JLabel
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
@@ -86,7 +87,8 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         JSeparator()
     )
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
-    private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    //private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val httpRequestExecutor = MyExecutor(api,myExtensionSettings)
 
 
     enum class ParameterType(val value: String) {
@@ -109,6 +111,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         const val testCaseParamTypeHeader = "Z-Test-Case-Param-Type"
         const val testCaseParamNameHeader = "Z-Test-Case-Param-Name"
         const val testCasePayloadHeader = "Z-Test-Case-Payload"
+        val allTestCaseHeaders = listOf(testCaseCategoryHeader,testCaseNameHeader,testCaseParamTypeHeader,testCaseParamNameHeader,testCasePayloadHeader)
 //        const val testCaseGrepStartHeader = "Z-Test-Case-Grep-Start"
 //        const val testCaseGrepEndHeader = "Z-Test-Case-Grep-End"
         const val BAMBDA_CATEGORY="id: 138442cc-d174-4feb-9690-aa5eb89b9043\n" +
@@ -201,6 +204,11 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         api.bambda().importBambda(BAMBDA_PARAM_NAME)
         api.bambda().importBambda(BAMBDA_PARAM_TYPE)
 
+        api.userInterface().registerHttpRequestEditorProvider(HttpRequestEditorProvider() {editorCreationContext ->
+            logger.debugLog("register http editor provider")
+            EveryParamHttpRequestEditor(api)
+        })
+
         logger.debugLog("...Finished Every Param")
     }
 
@@ -233,55 +241,55 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         val category = "Authorization"
         val myHttpRequestResponses = currentHttpRequestResponseList.toList()
         myHttpRequestResponses.forEach { testCaseRequestResponse ->
-            val testCases = mutableListOf<HttpRequest>()
-            executor.submit {
-                testCases.add(labelTestCase(testCaseRequestResponse.request(),category,"Original Request","","",""))
+        val testCases = mutableListOf<HttpRequest>()
 
-                val sliceTestCases = replaceAllPathSlicesAndLabel(testCaseRequestResponse.request(),category,"Change Capitalization on Slices") { slice ->
-                    invertCapitalization(slice.value)
-                }
-                testCases.addAll(sliceTestCases)
+            testCases.add(labelTestCase(testCaseRequestResponse.request(),category,"Original Request","","",""))
 
-                val testCaseMethod = testCaseRequestResponse.request().withMethod(invertCapitalization(testCaseRequestResponse.request().method()))
-                testCases.add(labelTestCase(testCaseMethod,category,"Invert Method Capitalization", ParameterType.HTTP_METHOD.value,testCaseRequestResponse.request().method(),testCaseMethod.method()))
+            val sliceTestCases = replaceAllPathSlicesAndLabel(testCaseRequestResponse.request(),category,"Change Capitalization on Slices") { slice ->
+                invertCapitalization(slice.value)
+            }
+            testCases.addAll(sliceTestCases)
 
-                val pathWordList=listOf("","#","#/",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
-                pathWordList.forEach { prefix ->
-                    val payloads = listOf(
-                        "/$prefix/..${testCaseRequestResponse.request().path()}",
-                        "//$prefix/..${testCaseRequestResponse.request().path()}",
-                        "/$prefix/%2e%2e${testCaseRequestResponse.request().path()}",
-                        "/$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
-                        "%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
-                        "%2f%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
-                        "./${testCaseRequestResponse.request().path()}",
-                        "%2e%2f${testCaseRequestResponse.request().path()}",
-                        "./$prefix/..${testCaseRequestResponse.request().path()}",
-                        "%2e%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
-                    )
+            val testCaseMethod = testCaseRequestResponse.request().withMethod(invertCapitalization(testCaseRequestResponse.request().method()))
+            testCases.add(labelTestCase(testCaseMethod,category,"Invert Method Capitalization", ParameterType.HTTP_METHOD.value,testCaseRequestResponse.request().method(),testCaseMethod.method()))
 
-                    payloads.forEach { payload ->
-                        val prefixTestCase = testCaseRequestResponse.request().withPath(payload)
-                        testCases.add(labelTestCase(prefixTestCase,category,"Use Static Dir with dot dot slash",
-                            ParameterType.PATH_SLICE.value,"URL Path Prefix", payload))
-                    }
-                }
-
-                val headerList=listOf(
-                    "X-Rewrite-Url",
-                    "X-Original-Url"
+            val pathWordList=listOf("","#","#/",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
+            pathWordList.forEach { prefix ->
+                val payloads = listOf(
+                    "/$prefix/..${testCaseRequestResponse.request().path()}",
+                    "//$prefix/..${testCaseRequestResponse.request().path()}",
+                    "/$prefix/%2e%2e${testCaseRequestResponse.request().path()}",
+                    "/$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                    "%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                    "%2f%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
+                    "./${testCaseRequestResponse.request().path()}",
+                    "%2e%2f${testCaseRequestResponse.request().path()}",
+                    "./$prefix/..${testCaseRequestResponse.request().path()}",
+                    "%2e%2f$prefix%2f%2e%2e${testCaseRequestResponse.request().path()}",
                 )
 
-                headerList.forEach { headerName ->
-                    val payload = testCaseRequestResponse.request().pathWithoutQuery()
-                    val headerTestCase = testCaseRequestResponse.request().withAddedHeader(headerName,payload).withPath("/")
-                    testCases.add(labelTestCase(headerTestCase,category,"Use Headers To Change URL", ParameterType.HTTP_HEADER.value,headerName,payload))
-                }
-
-                testCases.forEach {
-                    sendRequestConsiderSettings(it)
+                payloads.forEach { payload ->
+                    val prefixTestCase = testCaseRequestResponse.request().withPath(payload)
+                    testCases.add(labelTestCase(prefixTestCase,category,"Use Static Dir with dot dot slash",
+                        ParameterType.PATH_SLICE.value,"URL Path Prefix", payload))
                 }
             }
+
+            val headerList=listOf(
+                "X-Rewrite-Url",
+                "X-Original-Url"
+            )
+
+            headerList.forEach { headerName ->
+                val payload = testCaseRequestResponse.request().pathWithoutQuery()
+                val headerTestCase = testCaseRequestResponse.request().withAddedHeader(headerName,payload).withPath("/")
+                testCases.add(labelTestCase(headerTestCase,category,"Use Headers To Change URL", ParameterType.HTTP_HEADER.value,headerName,payload))
+            }
+
+            testCases.forEach {
+                sendRequestConsiderSettings(it)
+            }
+
         }
         logger.debugLog("Exit")
     }
@@ -353,7 +361,9 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     }
 
     fun blindXssImgActionPerformed(event: ActionEvent?) {
+
         logger.debugLog("Enter")
+
         val myHttpRequestResponses = currentHttpRequestResponseList.toList()
         val category = "XSS"
         val testCaseName = "Blind Image"
@@ -367,9 +377,17 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
             " ![](https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/blindmarkdownimg.png) "
         )
 
-        payloads.forEach { payload ->
-                iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
-        }
+
+            payloads.forEach { payload ->
+                iterateThroughParametersWithPayload(
+                    myHttpRequestResponses,
+                    category,
+                    testCaseName,
+                    payload,
+                    PayloadUpdateMode.APPEND
+                )
+            }
+
         logger.debugLog("Exit")
     }
 
@@ -959,7 +977,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //    }
 
     fun sendRequestConsiderSettings(httpRequest : HttpRequest) {
-        executor.submit {
+        httpRequestExecutor.runTask {
             if (myExtensionSettings.followRedirectSetting)
                 api.http().sendRequestWithUpdatedContentLength(
                     httpRequest,

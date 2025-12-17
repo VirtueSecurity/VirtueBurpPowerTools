@@ -49,6 +49,29 @@ class MyExecutor (
         }
     }
 
+    fun runTask(taskFunction : () -> Unit) {
+        if(myExtensionSettings.limitConcurrentRequestsSetting && currentLimit!=concurrentRequestLimit()) {
+            semaphore=Semaphore(concurrentRequestLimit())
+            currentLimit = concurrentRequestLimit()
+        }
+
+        executorService.submit {
+            queuedRequests++
+            printLoggingInfo()
+
+            if(myExtensionSettings.limitConcurrentRequestsSetting)
+                semaphore.acquire()
+
+            taskFunction()
+
+            if(myExtensionSettings.limitConcurrentRequestsSetting)
+                semaphore.release()
+
+            printLoggingInfo()
+            queuedRequests--
+        }
+    }
+
     fun printLoggingInfo() {
         if(myExtensionSettings.limitConcurrentRequestsSetting) {
             logger.debugLog("Concurrent Request Limit = ${concurrentRequestLimit()}")
