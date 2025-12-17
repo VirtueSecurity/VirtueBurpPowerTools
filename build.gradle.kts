@@ -1,7 +1,7 @@
 plugins {
     // Provides Kotlin Language Support
     // https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
-    kotlin("jvm") version "2.2.21"
+    kotlin("jvm") version "2.3.0"
 
     // Provides the shadowJar task in Gradle
     // https://plugins.gradle.org/plugin/com.github.johnrengelman.shadow
@@ -39,6 +39,8 @@ dependencies {
     implementation("com.github.ncoblentz:BurpMontoyaLibrary:0.2.0")
 
     implementation("org.json:json:20250517")
+
+    implementation("org.apache.commons:commons-text:1.15.0")
 }
 
 tasks.test {

