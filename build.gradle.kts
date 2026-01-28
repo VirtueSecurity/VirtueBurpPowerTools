@@ -10,7 +10,7 @@ plugins {
 }
 
 //Change this to reflect your package namespace
-group = "com.yournamehere.montoya"
+group = "com.virtuesecurity.montoya"
 version = "0.1.0"
 
 repositories {
@@ -28,7 +28,7 @@ repositories {
 }
 
 dependencies {
-    testImplementation(kotlin("test"))
+    //testImplementation(kotlin("test"))
 
     // Include the Montoya API from Maven Central:
     // https://central.sonatype.com/artifact/net.portswigger.burp.extensions/montoya-api
@@ -48,5 +48,5 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(24)
+    jvmToolchain(25)
 }

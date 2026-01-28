@@ -332,7 +332,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         logger.debugLog("Enter")
         val myHttpRequestResponses = currentHttpRequestResponseList.toList()
         val category = "SQL Injection"
-        val testCaseName = "Binary Logic"
+        val testCaseName = "Error Payload"
         val payloads = listOf(
             "'\","
         )
