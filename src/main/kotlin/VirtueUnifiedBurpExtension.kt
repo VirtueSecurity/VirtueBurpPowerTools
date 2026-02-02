@@ -42,13 +42,16 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         MatchReplaceSessionExtension(api, projectSettings)
         //EveryParameter(api, projectSettings)
         EveryParameter2(api, projectSettings)
-        KotlinBurpAutoNameRepeaterTabExtension(api, projectSettings)
+        val autoName = KotlinBurpAutoNameRepeaterTabExtension(api, projectSettings)
+        api.extension().registerUnloadingHandler { autoName.shutdown() }
         RetryRequestsMontoya(api, projectSettings)
-        CopyRequestResponse(api)
+        val copyRequestResponse = CopyRequestResponse(api)
+        api.extension().registerUnloadingHandler { copyRequestResponse.shutdown() }
         MontoyaKotlinSessionAccessTokenHelper(api, projectSettings)
         DisposableEmailScanChecker(api)
         ManualScanIssueManager(api,projectSettings)
-        MontoyaWSUtils(api,projectSettings)
+        val montoyaWSUtils = MontoyaWSUtils(api,projectSettings,)
+        api.extension().registerUnloadingHandler { montoyaWSUtils.shutdown() }
 //        VariableExtractInjectExtension(api, projectSettings)
 
 

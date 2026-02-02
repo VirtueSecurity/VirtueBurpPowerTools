@@ -4,85 +4,83 @@ import MyExtensionSettings
 import burp.api.montoya.MontoyaApi
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
-import java.util.concurrent.ExecutorService
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
 
-class MyExecutor (
+class MyExecutor(
     val api: MontoyaApi,
-    var myExtensionSettings: MyExtensionSettings ){
+    var myExtensionSettings: MyExtensionSettings
+) {
 
     fun concurrentRequestLimit(): Int = myExtensionSettings.requestLimit
 
-
-    private val executorService: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-    private val logger : MontoyaLogger = MontoyaLogger(api,LogLevel.DEBUG)
-    private var queuedRequests = 0
+    private val executorService = Executors.newVirtualThreadPerTaskExecutor()
+    private val dispatcher = executorService.asCoroutineDispatcher()
+    val customScope = CoroutineScope(dispatcher + SupervisorJob())
+    private val logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
+    private val queuedRequests = AtomicInteger(0)
     private var currentLimit = 10
 
+    private val semaphoreMutex = Mutex()
     var semaphore = Semaphore(10)
-        public get
         private set
 
+    fun runTask(retryRequestTask: RetryRequestsTask) = runTask { retryRequestTask.run() }
 
+    fun runTask(taskFunction: suspend () -> Unit) {
+        customScope.launch {
+            try {
+                checkLimit()
+                queuedRequests.incrementAndGet()
+                printLoggingInfo()
 
-    fun runTask(retryRequestTask: RetryRequestsTask) {
-        if(myExtensionSettings.limitConcurrentRequestsSetting && currentLimit!=concurrentRequestLimit()) {
-            semaphore=Semaphore(concurrentRequestLimit())
-            currentLimit = concurrentRequestLimit()
-        }
+                val useLimit = myExtensionSettings.limitConcurrentRequestsSetting
+                val currentSemaphore = semaphoreMutex.withLock { semaphore }
 
-        executorService.submit {
-            queuedRequests++
-            printLoggingInfo()
-
-            if(myExtensionSettings.limitConcurrentRequestsSetting)
-                semaphore.acquire()
-
-            retryRequestTask.run()
-
-            if(myExtensionSettings.limitConcurrentRequestsSetting)
-                semaphore.release()
-
-            printLoggingInfo()
-            queuedRequests--
+                if (useLimit) {
+                    currentSemaphore.withPermit {
+                        taskFunction()
+                    }
+                } else {
+                    taskFunction()
+                }
+            } finally {
+                printLoggingInfo()
+                queuedRequests.decrementAndGet()
+            }
         }
     }
 
-    fun runTask(taskFunction : () -> Unit) {
-        if(myExtensionSettings.limitConcurrentRequestsSetting && currentLimit!=concurrentRequestLimit()) {
-            semaphore=Semaphore(concurrentRequestLimit())
-            currentLimit = concurrentRequestLimit()
+    private suspend fun checkLimit() {
+        val targetLimit = concurrentRequestLimit().coerceAtLeast(1)
+        if (myExtensionSettings.limitConcurrentRequestsSetting && currentLimit != targetLimit) {
+            semaphoreMutex.withLock {
+                if (currentLimit != targetLimit) {
+                    semaphore = Semaphore(targetLimit)
+                    currentLimit = targetLimit
+                }
+            }
         }
+    }
 
-        executorService.submit {
-            queuedRequests++
-            printLoggingInfo()
-
-            if(myExtensionSettings.limitConcurrentRequestsSetting)
-                semaphore.acquire()
-
-            taskFunction()
-
-            if(myExtensionSettings.limitConcurrentRequestsSetting)
-                semaphore.release()
-
-            printLoggingInfo()
-            queuedRequests--
-        }
+    fun shutdown() {
+        customScope.cancel()
+        executorService.shutdown()
     }
 
     fun printLoggingInfo() {
-        if(myExtensionSettings.limitConcurrentRequestsSetting) {
-            logger.debugLog("Concurrent Request Limit = ${concurrentRequestLimit()}")
+        val limitMsg = if (myExtensionSettings.limitConcurrentRequestsSetting) {
+            "Concurrent Request Limit = ${concurrentRequestLimit()}"
+        } else {
+            "No concurrent request limits"
         }
-        else {
-            logger.debugLog("No concurrent request limits")
-        }
-
-        logger.debugLog("Semaphore: Queue Length = ${semaphore.queueLength}, Available Permits = ${semaphore.availablePermits()}")
-        logger.debugLog("Queued Requests: $queuedRequests")
+        logger.debugLog(limitMsg)
+        logger.debugLog("Semaphore: Available Permits = ${semaphore.availablePermits}")
+        logger.debugLog("Queued Requests: ${queuedRequests.get()}")
     }
-
-
 }

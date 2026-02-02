@@ -9,8 +9,16 @@ import burp.api.montoya.ui.contextmenu.WebSocketMessage
 import burp.api.montoya.ui.editor.EditorOptions
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.Executors
 import java.awt.*
-import java.util.concurrent.Semaphore
 import javax.swing.*
 
 class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ContextMenuItemsProvider, ProxyWebSocketCreationHandler {
@@ -27,10 +35,11 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
     private var webSocketMessages: MutableList<WebSocketMessage> = mutableListOf()
 
 
-
-
-    private var virtualThreadLimitSemaphore = Semaphore(DEFAULT_WS_REQUEST_LIMIT)
     private var currentThreadLimit = DEFAULT_WS_REQUEST_LIMIT
+    private var semaphore = Semaphore(currentThreadLimit)
+    private val virtualExecutor = Executors.newVirtualThreadPerTaskExecutor()
+    private val virtualDispatcher = virtualExecutor.asCoroutineDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + virtualDispatcher)
 
     private val showUpgradeRequestMenuItem = JMenuItem("Show Upgrade Request")
     private val showIntruderIntegerMenu = JMenuItem("Intruder: Integers")
@@ -49,18 +58,22 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
 
     private var selectedWebSocketMessage: WebSocketMessage? = null
 
+    fun shutdown() {
+        scope.cancel()
+        virtualExecutor.shutdown()
+    }
 
-    private fun resetSemaphore() {
-        if(myExtensionSettings.wsRequestLimit != currentThreadLimit) {
-            virtualThreadLimitSemaphore = Semaphore(myExtensionSettings.wsRequestLimit)
+    private fun updateConcurrencyLimit() {
+        if (myExtensionSettings.wsRequestLimit != currentThreadLimit) {
             currentThreadLimit = myExtensionSettings.wsRequestLimit
+            semaphore = Semaphore(currentThreadLimit)
         }
         logger.debugLog("WebSocket Request Limit set to: $currentThreadLimit")
     }
 
     init {
 
-        
+
         // This will print to Burp Suite's Extension output and can be used to debug whether the extension loaded properly
         logger.debugLog("Started loading the extension...")
 
@@ -70,7 +83,7 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
 
 
 
-        resetSemaphore()
+        updateConcurrencyLimit()
 
         showUpgradeRequestMenuItem.addActionListener {
             webSocketMessages.forEach { message ->
@@ -155,12 +168,11 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
                 val startButton = JButton("Start")
 
                 startButton.addActionListener {
-                    resetSemaphore()
+                    updateConcurrencyLimit()
                     val startInteger = startIntegerField.text.toInt()
                     val endInteger = endIntegerField.text.toInt()
                     val replaceString = replaceField.text
 
-                    Thread.ofVirtual().start {
                     val selectedWebSocketConnection = webSocketConnectionsComboBox.selectedItem as String
                     selectedWebSocketConnection.substringBefore(" ").toIntOrNull()?.let { index ->
                         logger.debugLog("Starting WS Intruder on connection $index")
@@ -168,34 +180,27 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
                         logger.debugLog("Replace Value Found?: ${message.payload().toString().contains(replaceString)}")
 
                         selectedProxyCreation = proxyWebSocketCreations[index]
-                        for(i in startInteger..endInteger) {
-                            virtualThreadLimitSemaphore.acquire()
-                            try {
-                                Thread.ofVirtual().start {
-                                    val newMessage = message.payload().toString().replace(replaceString, i.toString())
-                                    logger.debugLog("Current Progress ====================\n$startInteger <= $i <= $endInteger \n${selectedProxyCreation} ${selectedProxyCreation?.proxyWebSocket()}\n-------------------")
-                                    if(proxyWebSocketCreations.contains(selectedProxyCreation)) {
-                                        logger.debugLog("Sending Message (${message.direction()}):\n$newMessage\n-----------------")
-                                        selectedProxyCreation?.proxyWebSocket()?.sendTextMessage(newMessage, message.direction())
-                                    }
-                                    else {
-                                        logger.debugLog("Proxy WebSocket Connection is no longer there...")
-                                        logger.errorLog("Proxy WebSocket Connection is no longer there... $index: ${selectedProxyCreation?.upgradeRequest()?.url()}")
+
+                        for (i in startInteger..endInteger) {
+                            scope.launch {
+                                semaphore.withPermit {
+                                    try {
+                                        val newMessage = message.payload().toString().replace(replaceString, i.toString())
+                                        logger.debugLog("Current Progress ====================\n$startInteger <= $i <= $endInteger \n${selectedProxyCreation} ${selectedProxyCreation?.proxyWebSocket()}\n-------------------")
+                                        if (proxyWebSocketCreations.contains(selectedProxyCreation)) {
+                                            logger.debugLog("Sending Message (${message.direction()}):\n$newMessage\n-----------------")
+                                            selectedProxyCreation?.proxyWebSocket()?.sendTextMessage(newMessage, message.direction())
+                                        } else {
+                                            logger.debugLog("Proxy WebSocket Connection is no longer there...")
+                                            logger.errorLog("Proxy WebSocket Connection is no longer there... $index: ${selectedProxyCreation?.upgradeRequest()?.url()}")
+                                        }
+                                    } catch (e: Exception) {
+                                        logger.errorLog("Error running coroutine: ${e.message}\n${e.stackTraceToString()}")
                                     }
                                 }
                             }
-                            catch (e: Exception) {
-                                logger.errorLog("Error running virtual thread: ${e.message}\n${e.stackTraceToString()}")
-                            }
-                            finally {
-                                virtualThreadLimitSemaphore.release()
-                            }
                         }
-
                     }
-                        }
-
-
                 }
 
                 val cancelButton = JButton("Cancel")

@@ -9,11 +9,17 @@ import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import burp.api.montoya.scanner.scancheck.PassiveScanCheck
 import burp.api.montoya.scanner.scancheck.ScanCheckType
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import kotlinx.coroutines.*
+//import java.net.URI
+//import java.net.http.HttpClient
+//import java.net.http.HttpRequest
+//import java.net.http.HttpResponse
 import java.util.regex.Pattern
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+//import kotlinx.coroutines.runBlocking
 
 class DisposableEmailScanChecker(private val api: MontoyaApi) : PassiveScanCheck {
 
@@ -25,47 +31,71 @@ class DisposableEmailScanChecker(private val api: MontoyaApi) : PassiveScanCheck
     private val disposableDomains: MutableSet<String> = HashSet()
     private val emailPattern = Pattern.compile("[a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})")
     private var logger = MontoyaLogger(api, LogLevel.DEBUG)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     init {
 
         logger.debugLog("Starting $PLUGIN_NAME...")
-        Thread.ofVirtual().start {
+        scope.launch {
             loadBlocklist()
         }
-        Thread { loadBlocklist() }.start()
         api.scanner().registerPassiveScanCheck(this, ScanCheckType.PER_REQUEST)
         logger.debugLog("...Finished $PLUGIN_NAME")
     }
 
-    private fun loadBlocklist() {
+    private suspend fun loadBlocklist() {
 
         logger.debugLog("Fetching blocklist from: $BLOCKLIST_URL")
 
-        val client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build()
+        HttpClient(CIO).use { client ->
+            try {
+                // 3. Make the GET request
+                val response: HttpResponse = client.get(BLOCKLIST_URL)
 
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(BLOCKLIST_URL))
-            .GET()
-            .build()
+                // 4. Validate status (Optional but recommended)
+                if (response.status.value in 200..299) {
+                    response.bodyAsText()
+                    val domains = response.bodyAsText().lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }.toSet()
+
+                    disposableDomains.addAll(domains)
+                    api.logging().logToOutput("Successfully loaded ${domains.size} disposable domains.")
+
+                } else {
+                    logger.errorLog("Failed to download. Status code: ${response.status}")
+                }
+            } catch (e: Exception) {
+                logger.errorLog("Failed to download. Exception: ${e.message}")
+            }
+        }
+//        val client = HttpClient.newBuilder()
+//            .followRedirects(HttpClient.Redirect.NORMAL)
+//            .build()
+//
+//        val request = HttpRequest.newBuilder()
+//            .uri(URI.create(BLOCKLIST_URL))
+//            .GET()
+//            .build()
 
         // This downloads the file directly to disk
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+//        val response = withContext(Dispatchers.IO) {
+//            client.send(request, HttpResponse.BodyHandlers.ofString())
+//        }
+//
+//        if (response.statusCode() == 200) {
+//            println("Found:\n${response.body()}")
+//        } else {
+//            println("Failed to download. Status code: ${response.statusCode()}")
+//        }
+//
+//        val domains = response.body().lines()
+//        .map { it.trim() }
+//        .filter { it.isNotEmpty() }.toSet()
 
-        if (response.statusCode() == 200) {
-            println("Found:\n${response.body()}")
-        } else {
-            println("Failed to download. Status code: ${response.statusCode()}")
-        }
-
-        val domains = response.body().lines()
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }.toSet()
-
-        disposableDomains.addAll(domains)
-
-        api.logging().logToOutput("Successfully loaded ${domains.size} disposable domains.")
+//        disposableDomains.addAll(domains)
+//
+//        api.logging().logToOutput("Successfully loaded ${domains.size} disposable domains.")
 
     }
 

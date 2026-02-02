@@ -11,14 +11,11 @@ import com.nickcoblentz.montoya.MontoyaLogger
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utils.CopyRequestResponseHandler
 import com.nickcoblentz.montoya.utils.CopyRequestResponseHotKeyProvider
+import kotlinx.coroutines.cancel
 
 class RetryRequestsMontoya(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ProxyWebSocketCreationHandler {
     private var logger: MontoyaLogger = MontoyaLogger(api,LogLevel.DEBUG)
     private var myExecutor: MyExecutor
-
-    private var currentLimit = 10
-    var pollingThread: Thread? = null
-    var exiting = false
 
     private val proxyWebSockets = mutableListOf<ProxyWebSocketCreation>()
 
@@ -30,6 +27,7 @@ class RetryRequestsMontoya(private val api: MontoyaApi, private val myExtensionS
 
 
         myExecutor = MyExecutor(api,myExtensionSettings)
+        api.extension().registerUnloadingHandler { myExecutor.shutdown() }
         val retryContenxtMenuProvider = RetryRequestsContextMenuProvider(api, myExecutor,proxyWebSockets)
         api.userInterface().registerContextMenuItemsProvider(retryContenxtMenuProvider)
         api.proxy().registerWebSocketCreationHandler(this)

@@ -10,14 +10,15 @@ import com.nickcoblentz.montoya.MontoyaLogger
 
 class CopyRequestResponse(api: MontoyaApi) {
     private lateinit var _copyHandler: CopyRequestResponseHandler
-
+    private lateinit var _contextMenuProvider: CopyRequestResponseContextMenuProvider
 
 
     init {
         val logger = MontoyaLogger(api, LogLevel.DEBUG)
         logger.debugLog(this.javaClass.getName(), "CopyRequestResponse Starting...")
         _copyHandler = CopyRequestResponseHandler(api)
-        api.userInterface().registerContextMenuItemsProvider(CopyRequestResponseContextMenuProvider(api,_copyHandler))
+        _contextMenuProvider = CopyRequestResponseContextMenuProvider(api,_copyHandler)
+        api.userInterface().registerContextMenuItemsProvider(_contextMenuProvider)
         api.userInterface().registerHotKeyHandler(
             HotKey.hotKey("Copy Full Request/Response","Ctrl+Shift+C"),
             CopyRequestResponseHotKeyProvider(api,true,CopyRequestResponseHandler.CopyMode.RequestFullResponseFull))
@@ -45,6 +46,10 @@ class CopyRequestResponse(api: MontoyaApi) {
         });
 
  */
+    }
+
+    fun shutdown() {
+        _contextMenuProvider.shutdown()
     }
 }
 

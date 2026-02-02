@@ -7,7 +7,9 @@ import burp.api.montoya.ui.contextmenu.*
 import burp.api.montoya.ui.hotkey.HotKeyHandler
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
+import kotlinx.coroutines.*
 import java.awt.Component
+import java.util.concurrent.Executors
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.event.ActionEvent
@@ -22,6 +24,8 @@ import javax.swing.JTextArea
 import javax.swing.SwingUtilities
 
 class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, private val _copyHandler: CopyRequestResponseHandler) : ContextMenuItemsProvider, ActionListener {
+    private val _job = SupervisorJob()
+    private val _coroutineScope = CoroutineScope(Dispatchers.Default + _job)
     private val _MenuItemList: List<Component>
     private var currentEvent: ContextMenuEvent? = null
     private var currentWSEvent: WebSocketContextMenuEvent? = null
@@ -124,29 +128,29 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
     }
 
     private fun processSearchAndExtract(e: ActionEvent, regexInput: String) {
-        Thread.ofVirtual().start {
-            val selectedRequestResponses = if (currentEventType == _EventTypeHTTP) {
-                if (currentEvent?.selectedRequestResponses()?.isNotEmpty() ?: false) {
-                    currentEvent!!.selectedRequestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) }
-                } else if (currentEvent!!.messageEditorRequestResponse().isPresent) {
-                    listOf(currentEvent!!.messageEditorRequestResponse().get().requestResponse().request().toString(),currentEvent!!.messageEditorRequestResponse().get().requestResponse().response().toString())
-                } else {
-                    listOf<String>()
-                }
-            } else if (currentEventType == _EventTypeWS) {
-                if (currentWSEvent?.selectedWebSocketMessages()?.isNotEmpty() ?: false) {
-                    currentWSEvent!!.selectedWebSocketMessages().map { it -> it.payload().toString() }
-                } else if (currentWSEvent?.messageEditorWebSocket()?.isPresent ?: false) {
-                    mutableListOf(currentWSEvent!!.messageEditorWebSocket().get().webSocketMessage().payload().toString())
-                } else {
-                    mutableListOf<String>()
-                }
+        val selectedRequestResponses = if (currentEventType == _EventTypeHTTP) {
+            if (currentEvent?.selectedRequestResponses()?.isNotEmpty() ?: false) {
+                currentEvent!!.selectedRequestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) }
+            } else if (currentEvent!!.messageEditorRequestResponse().isPresent) {
+                listOf(currentEvent!!.messageEditorRequestResponse().get().requestResponse().request().toString(),currentEvent!!.messageEditorRequestResponse().get().requestResponse().response().toString())
             } else {
-                currentAuditEvent?.let { event ->
-                    event.selectedIssues().flatMap { it.requestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) } }
-                }
+                listOf<String>()
             }
+        } else if (currentEventType == _EventTypeWS) {
+            if (currentWSEvent?.selectedWebSocketMessages()?.isNotEmpty() ?: false) {
+                currentWSEvent!!.selectedWebSocketMessages().map { it -> it.payload().toString() }
+            } else if (currentWSEvent?.messageEditorWebSocket()?.isPresent ?: false) {
+                mutableListOf(currentWSEvent!!.messageEditorWebSocket().get().webSocketMessage().payload().toString())
+            } else {
+                mutableListOf<String>()
+            }
+        } else {
+            currentAuditEvent?.let { event ->
+                event.selectedIssues().flatMap { it.requestResponses().flatMap { it -> listOf(it.request().toString(),it.response().toString()) } }
+            }
+        }
 
+        _coroutineScope.launch {
             val regex = regexInput.toRegex(setOf(RegexOption.IGNORE_CASE,RegexOption.MULTILINE))
             val sb = StringBuilder()
             var matchCount = 0
@@ -174,7 +178,8 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
             }
 
             // Show results back on the Event Dispatch Thread
-            SwingUtilities.invokeLater {
+            //SwingUtilities.invokeLater {
+            withContext(Dispatchers.Main) {
                 if (sb.isNotEmpty()) {
                     displayResults(sb.toString(),matchCount)
                 } else {
@@ -197,6 +202,10 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
             "Extraction Results ($count matches)",
             JOptionPane.INFORMATION_MESSAGE
         )
+    }
+
+    fun shutdown() {
+        _coroutineScope.cancel()
     }
 
     override fun actionPerformed(e: ActionEvent) {

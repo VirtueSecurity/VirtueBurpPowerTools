@@ -41,6 +41,11 @@ dependencies {
     implementation("org.json:json:20250517")
 
     implementation("org.apache.commons:commons-text:1.15.0")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
+    implementation("io.ktor:ktor-client-core:3.4.0")
+    implementation("io.ktor:ktor-client-cio:3.4.0")
 }
 
 tasks.test {

@@ -14,6 +14,7 @@ import com.nickcoblentz.montoya.EveryParameter2
 import java.awt.Font
 import javax.swing.JLabel
 import javax.swing.JSeparator
+import kotlinx.coroutines.*
 
 
 // Montoya API Documentation: https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html
@@ -38,7 +39,10 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueMenuItem,sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem,includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueMenuItem,sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+
+    private var job = SupervisorJob()
+    private var coroutineScope = CoroutineScope(Dispatchers.Default + job)
 
     // Uncomment this section if you wish to use persistent settings and automatic UI Generation from: https://github.com/ncoblentz/BurpMontoyaLibrary
     // Add one or more persistent settings here
@@ -61,6 +65,7 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         sendToOrganizerUniqueVerbURLMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_METHOD_URL) }
         sendToOrganizerUniqueHostPathMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.UNIQUE_PATH) }
         sendToOrganizerUniqueMenuItem.addActionListener { _ -> sendToOrganizer(SendToOrganizerOption.NONE) }
+
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
 
@@ -129,11 +134,12 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
             groupedRequestResponses.forEach { (groupName, rqRs) ->
                 logger.debugLog("Working on group: $groupName")
-                Thread.ofVirtual().start {
+                coroutineScope.launch {
                     logger.debugLog("Ranking...")
                     val rankedRequests = api.utilities().rankingUtils().rank(rqRs)
                     val uniqueRankedRequests = rankedRequests.distinctBy { it.rank() }
                     uniqueRankedRequests.forEach {
+                        ensureActive()
                         val rqRs = enrichWithTestCaseNotes(it.requestResponse().withAnnotations(Annotations.annotations("Rank: ${it.rank()}")))
 
                         api.organizer().sendToOrganizer(rqRs)
@@ -141,6 +147,11 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
                 }
             }
         }
+    }
+
+    fun shutdown() {
+        coroutineScope.cancel()
+        logger.debugLog("Cancelled all organizer tasks")
     }
 
 //            for(requestResponse in requestResponses) {

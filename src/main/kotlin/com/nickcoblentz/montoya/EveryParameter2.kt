@@ -17,6 +17,7 @@ import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
 import burp.api.montoya.ui.editor.extension.EditorCreationContext
 import burp.api.montoya.ui.editor.extension.HttpRequestEditorProvider
 import com.nickcoblentz.montoya.utilities.MyExecutor
+import kotlinx.coroutines.cancel
 import org.apache.commons.text.StringEscapeUtils
 import pathSlices
 import replacePathSlice
@@ -176,7 +177,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     init {
 
         logger.debugLog("Starting Every Param...")
-
+        api.extension().registerUnloadingHandler { httpRequestExecutor.customScope.cancel() }
         api.userInterface().registerContextMenuItemsProvider(this)
 //        sqliQuickMenuItem.addActionListener({ e -> sqliQuickActionPerformed(e) })
         sqliLogicPayloadsMenuItem.addActionListener({ e -> sqliLogicPayloadsActionPerformed(e) })
