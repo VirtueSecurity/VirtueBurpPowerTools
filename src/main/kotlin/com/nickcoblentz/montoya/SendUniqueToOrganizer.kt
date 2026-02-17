@@ -114,7 +114,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
     private val pluginName = "Send Unique to Organizer"
     private val regexOptions = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE)
 
-    val concurrentSetRequestReponses = ConcurrentHashMap.newKeySet<Long>()
+    val concurrentSetRequestResponses = ConcurrentHashMap.newKeySet<Long>()
 
     init {
 
@@ -133,6 +133,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
                     api.organizer().items().filter{ item -> item.annotations().hasNotes() && item.annotations().notes()!=null && item.annotations().notes().contains("Session: ") }.forEach { item ->
                         try {
+
                             val notes = item.annotations().notes()
                             val pattern = Regex("Session: (\\d)")
                             val results = pattern.find(notes)
@@ -148,7 +149,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
                                         myExtensionSettings.uniqueToOrganizerResponseUniquenessCaptureGroup)
 
                                     val hash = possibleItem.buildHashFromFields()
-                                    concurrentSetRequestReponses.add(hash)
+                                    concurrentSetRequestResponses.add(hash)
 
                                 }
                             }
@@ -197,8 +198,8 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
         logger.debugLog("Finished loading the $pluginName extension...")
     }
 
-    private suspend fun processItem(responseReceived: HttpResponseReceived) {
-        var sendToOrganizer = false
+    private fun processItem(responseReceived: HttpResponseReceived) {
+
         var modifiedAnnotations = responseReceived.annotations()
         val responseString = responseReceived.toString()
         val request = responseReceived.initiatingRequest()
@@ -220,9 +221,9 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
             val hash = possibleItem.buildHashFromFields()
 
-            if(!myExtensionSettings.uniqueToOrganizerIncludeUniqueOnly || !concurrentSetRequestReponses.contains(hash)) {
+            if(!myExtensionSettings.uniqueToOrganizerIncludeUniqueOnly || !concurrentSetRequestResponses.contains(hash)) {
 
-                concurrentSetRequestReponses.add(hash)
+                concurrentSetRequestResponses.add(hash)
                 val notes = buildList {
                     if(possibleItem.requestCaptureGroups.isNotBlank()) {
                         add(possibleItem.requestCaptureGroups)
@@ -230,7 +231,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
                     if(possibleItem.responseCaptureGroups.isNotBlank()) {
                         add(possibleItem.responseCaptureGroups)
                     }
-                    add("Session: 1 (${resolveSessionToName()})")
+                    add("Session: ${possibleItem.sessionId} (${resolveSessionToName()})")
                 }
                 modifiedAnnotations=Annotations.annotations().withNotes(notes.joinToString("; ")).withHighlightColor(resolveSessionToHighlightColor())
                 api.organizer().sendToOrganizer(HttpRequestResponse.httpRequestResponse(request,responseReceived,modifiedAnnotations))
@@ -288,7 +289,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
         if(myExtensionSettings.uniqueToOrganizerMapEnabled) {
             responseReceived?.let { responseReceived ->
-                var modifiedResponseReceived = responseReceived
+
                 var modifiedAnnotations = responseReceived.annotations()
                 val request = responseReceived.initiatingRequest()
                 if(request.isInScope) {
@@ -302,7 +303,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
                           if(statusCodeMatches(responseReceived.statusCode())) {
                               scope.launch {
-                                  taskQueue.send(modifiedResponseReceived)
+                                  taskQueue.send(responseReceived)
                               }
                           }
                           else {
@@ -322,7 +323,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
                 else {
                     modifiedAnnotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.NOT_IN_SCOPE)
                 }
-                return ResponseReceivedAction.continueWith(modifiedResponseReceived, modifiedAnnotations)
+                return ResponseReceivedAction.continueWith(responseReceived, modifiedAnnotations)
             }
         }
 
