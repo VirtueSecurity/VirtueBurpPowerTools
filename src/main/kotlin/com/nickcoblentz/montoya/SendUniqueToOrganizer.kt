@@ -129,6 +129,38 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
         }
 
         scope.launch {
+            while (isActive) {
+
+                    api.organizer().items().filter{ item -> item.annotations().hasNotes() && item.annotations().notes()!=null && item.annotations().notes().contains("Session: ") }.forEach { item ->
+                        try {
+                            val notes = item.annotations().notes()
+                            val pattern = Regex("Session: (\\d)")
+                            val results = pattern.find(notes)
+                            if(results != null && results.groups.size > 1) {
+                                results.groups[1]?.let {
+
+
+                                    val possibleItem = PossibleUniqueItemForOrganizer(myExtensionSettings.uniqueToOrganizerSelectedSession,
+                                        item.request(),
+                                        item.response(),
+                                        myExtensionSettings.uniqueToOrganizerUniqueQueryParamsOnly,
+                                        myExtensionSettings.uniqueToOrganizerRequestUniquenessCaptureGroup,
+                                        myExtensionSettings.uniqueToOrganizerResponseUniquenessCaptureGroup)
+
+                                    val hash = possibleItem.buildHashFromFields()
+                                    concurrentSetRequestReponses.add(hash)
+
+                                }
+                            }
+                        } catch (e: Exception) {
+                            logger.errorLog("Exception when repopulating hashes:\n${e.message}")
+                        }
+                    }
+
+            }
+        }
+
+        scope.launch {
             for(item in taskQueue) {
                 try {
                     processItem(item)
@@ -141,7 +173,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
         scope.launch {
             while (isActive) {
-                delay(10000)
+                delay(30000)
                 try {
                     api.organizer().items().filter{ item -> !item.annotations().hasHighlightColor() && item.annotations().hasNotes() && item.annotations().notes()!=null }.forEach { item ->
                         val notes = item.annotations().notes()
