@@ -46,6 +46,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
     implementation("io.ktor:ktor-client-core:3.4.0")
     implementation("io.ktor:ktor-client-cio:3.4.0")
+
+    implementation("at.yawk.lz4:lz4-java:1.10.3")
+
 }
 
 tasks.test {

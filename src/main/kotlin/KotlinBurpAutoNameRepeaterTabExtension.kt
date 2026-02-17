@@ -10,11 +10,14 @@ import com.nickcoblentz.montoya.MontoyaLogger
 import java.awt.Component
 import javax.swing.JMenuItem
 import burp.api.montoya.core.Annotations
+import burp.api.montoya.core.Range
+import burp.api.montoya.ui.contextmenu.MessageEditorHttpRequestResponse
 import com.nickcoblentz.montoya.EveryParameter2
 import java.awt.Font
 import javax.swing.JLabel
 import javax.swing.JSeparator
 import kotlinx.coroutines.*
+import java.util.Optional
 
 
 // Montoya API Documentation: https://portswigger.github.io/burp-extensions-montoya-api/javadoc/burp/api/montoya/MontoyaApi.html
@@ -22,12 +25,14 @@ import kotlinx.coroutines.*
 
 class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, private val myExtensionSettings: MyExtensionSettings) : ContextMenuItemsProvider {
 
+
     private var logger: MontoyaLogger = MontoyaLogger(api, LogLevel.DEBUG)
     private val sendToRepeaterMenuItem = JMenuItem("Send To Repeater & Auto Name")
     private val sendToOrganizerUniqueMenuItem = JMenuItem("Send Unique To Organizer")
     private val sendToOrganizerUniqueVerbURLMenuItem = JMenuItem("Send Unique Verb/URL To Organizer")
     private val sendToOrganizerUniqueVerbHostPathMenuItem = JMenuItem("Send Unique Verb/Host/Path To Organizer")
     private val sendToOrganizerUniqueHostPathMenuItem = JMenuItem("Send Unique Host/Path To Organizer")
+    private val sendToOrganizerWithHighlightAsCommentMenuItem = JMenuItem("Send To Organizer: Highlight as Note")
 
     private val includeBaseURLInScopeMenuItem = JMenuItem("Add Base URL to Scope")
     private val excludeBaseURLFromScopeMenuItem = JMenuItem("Exclude Base URL from Scope")
@@ -39,7 +44,10 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
         font = font.deriveFont(Font.BOLD)
     }
 
-    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerUniqueMenuItem,sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
+    private var selectionContext : MessageEditorHttpRequestResponse.SelectionContext? = null
+    private var selectionOffsets: Range? = null
+
+    private val menuItems : MutableList<Component> = mutableListOf(label,sendToRepeaterMenuItem, sendToOrganizerWithHighlightAsCommentMenuItem,sendToOrganizerUniqueMenuItem,sendToOrganizerUniqueHostPathMenuItem,sendToOrganizerUniqueVerbHostPathMenuItem, sendToOrganizerUniqueVerbURLMenuItem, includeBaseURLInScopeMenuItem, excludeBaseURLFromScopeMenuItem,JSeparator())
 
     private var job = SupervisorJob()
     private var coroutineScope = CoroutineScope(Dispatchers.Default + job)
@@ -68,6 +76,8 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
 
         includeBaseURLInScopeMenuItem.addActionListener  { _ -> includeInScope() }
         excludeBaseURLFromScopeMenuItem.addActionListener  {_ -> excludeFromScope() }
+
+        sendToOrganizerWithHighlightAsCommentMenuItem.addActionListener { _ -> sendToOrganizerWithHighlightAsComment() }
 
         // Code for setting up your extension ends here
 
@@ -105,6 +115,22 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
     }
 
     private fun getBaseURL(requestResponse: HttpRequestResponse) : String = requestResponse.request().url().replace(requestResponse.request().path().substring(1),"")
+
+    private fun sendToOrganizerWithHighlightAsComment() {
+        if(requestResponses.isNotEmpty() && selectionContext!=null && selectionOffsets!=null) {
+            val content = if(selectionContext == MessageEditorHttpRequestResponse.SelectionContext.REQUEST) {
+                requestResponses[0].request().toString()
+            }
+            else {
+                requestResponses[0].response().toString()
+            }
+            selectionOffsets?.let { it ->
+                val notes = content.substring(it.startIndexInclusive(), it.endIndexExclusive())
+                api.organizer().sendToOrganizer(requestResponses[0].withAnnotations(Annotations.annotations(notes)))
+            }
+
+        }
+    }
 
     private fun sendToOrganizer(option : SendToOrganizerOption) {
         if(requestResponses.isNotEmpty()) {
@@ -221,12 +247,18 @@ class KotlinBurpAutoNameRepeaterTabExtension(private val api: MontoyaApi, privat
     }
 
     override fun provideMenuItems(event: ContextMenuEvent?): MutableList<Component> {
+        selectionContext=null
+        selectionOffsets=null
         event?.let {
             requestResponses = if(it.selectedRequestResponses().isNotEmpty()) {
                 it.selectedRequestResponses()
             }
             else if(!it.messageEditorRequestResponse().isEmpty) {
-                listOf(it.messageEditorRequestResponse().get().requestResponse())
+                val requestResponse = it.messageEditorRequestResponse().get()
+                selectionContext = requestResponse.selectionContext()
+                selectionOffsets = if(requestResponse.selectionOffsets().isPresent) requestResponse.selectionOffsets().get() else null
+
+                listOf(requestResponse.requestResponse())
             }
             else {
                 emptyList<HttpRequestResponse>()

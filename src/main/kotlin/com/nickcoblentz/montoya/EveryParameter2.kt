@@ -3,6 +3,7 @@ package com.nickcoblentz.montoya
 import MyExtensionSettings
 import PathSlice
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.RedirectionMode
 import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
@@ -14,7 +15,6 @@ import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.WebSocketContextMenuEvent
-import burp.api.montoya.ui.editor.extension.EditorCreationContext
 import burp.api.montoya.ui.editor.extension.HttpRequestEditorProvider
 import com.nickcoblentz.montoya.utilities.MyExecutor
 import kotlinx.coroutines.cancel
@@ -27,7 +27,10 @@ import java.awt.event.ActionEvent
 import javax.swing.JLabel
 import javax.swing.JMenuItem
 import javax.swing.JSeparator
+import javax.swing.SwingUtilities
 import kotlin.io.encoding.Base64
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 
 class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettings : MyExtensionSettings) : ContextMenuItemsProvider {
@@ -53,6 +56,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     private val spoofIPMenuItem = JMenuItem("Spoof IP Using Headers")
 //    private val dnsOverHTTPMenuItem = JMenuItem("DNS-over-HTTP")
     private val authorizationTestsMenuItem = JMenuItem("Authorization Tests")
+//    private val requestSmugglingMenuItem = JMenuItem("Request Smuggling Tests")
 
 
 
@@ -86,6 +90,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
         collabUrlMenuItem,
         spoofIPMenuItem,
         xmlOutOfBandMenuItem,
+//        requestSmugglingMenuItem,
         JSeparator()
     )
     private var currentHttpRequestResponseList = mutableListOf<HttpRequestResponse>()
@@ -199,6 +204,7 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        dnsOverHTTPMenuItem.addActionListener { e-> dnsOverHTTPActionPerformed(e)}
 //        maxForwardsMenuItem.addActionListener { e-> maxForwardsActionPerformed(e)}
         authorizationTestsMenuItem.addActionListener { e -> authorizationTestsActionPerformed(e) }
+//        requestSmugglingMenuItem.addActionListener { e -> requestSmugglingActionPerformed(e) }
 
         api.bambda().importBambda(BAMBDA_CATEGORY)
         api.bambda().importBambda(BAMBDA_NAME)
@@ -238,6 +244,94 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
     }
 
     // region Test Cases
+
+//    @OptIn(ExperimentalUuidApi::class)
+//    private fun requestSmugglingActionPerformed(e: ActionEvent) {
+//        logger.debugLog("Enter")
+//        val categoryCLTE = "Request Smuggling: CL.TE"
+//        val categoryTECL = "Request Smuggling: TE.CL"
+//        val myHttpRequestResponses = currentHttpRequestResponseList.toList()
+//        SwingUtilities.invokeLater {
+//            myHttpRequestResponses.forEach { testCaseRequestResponse ->
+//
+//                val controlRequest =
+//                    testCaseRequestResponse.request().withMethod("GET").withBody("").withRemovedHeader("Content-Length")
+//
+//
+//
+//                repeat(2) {
+//
+//                    sendManualHttp11Request(labelTestCase(
+//                        testCaseRequestResponse.request()
+//                            .withMethod("POST"),
+//                        "Request Smuggling Probe",
+//                        "CL.TE",
+//                        "",
+//                        "",
+//                        ""
+//                    ),false)
+//
+////                    sendManualHttp11RequestList(
+////                        beforeAfterTestCaseGenerator(
+////                            controlRequest,
+////                            testCaseRequestResponse
+////                                .request()
+////                                .withMethod("GET")
+////                                .withBody("0\r\n\r\nFAKE${Uuid.random()}")
+////                                .withAddedHeader("Transfer-Encoding", "chunked")
+////                                .withRemovedHeader("Connection"),
+////                            categoryCLTE,
+////                            "GET with FAKE in Body"
+////                        ), true
+////                    )
+////
+////                    sendManualHttp11RequestList(
+////                        beforeAfterTestCaseGenerator(
+////                            controlRequest,
+////                            testCaseRequestResponse
+////                                .request()
+////                                .withMethod("POST")
+////                                .withHeader("Content-Length", "0")
+////                                .withRemovedHeader("Connection")
+////                                .withBody("0\r\n\r\nFAKE${Uuid.random()}")
+////                                .withAddedHeader("Transfer-Encoding", "chunked"),
+////                            categoryCLTE,
+////                            "POST with FAKE in Body"
+////                        ), true
+////                    )
+////
+////                    sendManualHttp11RequestList(
+////                        beforeAfterTestCaseGenerator(
+////                            controlRequest,
+////                            testCaseRequestResponse
+////                                .request()
+////                                .withMethod("GET")
+////                                .withHeader("Content-Length", "0")
+////                                .withRemovedHeader("Connection")
+////                                .withBody("0\r\n\r\nFAKE${Uuid.random()}")
+////                                .withAddedHeader("Transfer-Encoding", "chunked"),
+////                            categoryCLTE,
+////                            "GET with ContentLength and FAKE in Body"
+////                        ), true
+////                    )
+//                }
+//            }
+//
+//            logger.debugLog("Exit")
+//        }
+//    }
+
+    fun beforeAfterTestCaseGenerator(controlRequest: HttpRequest, attackRequest : HttpRequest, category: String, label: String) : List<HttpRequest> {
+        val labeledControlRequestBefore =
+                    labelTestCase(controlRequest, category, "GET Preceding Attack: $label", "", "", "")
+        val labeledControlRequestAfter =
+                    labelTestCase(controlRequest, category, "GET Following Attack: $label", "", "", "")
+        val labeledAttackRequest =
+                    labelTestCase(attackRequest, category, "Attack: $label", "", "", "")
+
+        return listOf(labeledControlRequestBefore,labeledControlRequestBefore,labeledAttackRequest, labeledControlRequestAfter,labeledControlRequestAfter)
+    }
+
     private fun authorizationTestsActionPerformed(e: ActionEvent) {
         logger.debugLog("Enter")
         val category = "Authorization"
@@ -981,6 +1075,29 @@ class EveryParameter2(private val api: MontoyaApi, private val myExtensionSettin
 //        }
 //        logger.debugLog("Exit")
 //    }
+
+    fun sendManualHttp11Request(httpRequest: HttpRequest, followRedirect: Boolean = true) {
+        val redirectMode = if (followRedirect) RedirectionMode.ALWAYS else RedirectionMode.NEVER
+
+        sendManualHttp11RequestList(listOf(httpRequest),followRedirect)
+
+
+    }
+
+    fun sendManualHttp11RequestList(httpRequests: List<HttpRequest>, followRedirect: Boolean = true) {
+        val redirectMode = if (followRedirect) RedirectionMode.ALWAYS else RedirectionMode.NEVER
+
+        httpRequests.forEach {httpRequest ->
+            httpRequestExecutor.runTask {
+                api.http().sendRequest(
+                    httpRequest,
+                    RequestOptions.requestOptions().withRedirectionMode(redirectMode).withHttpMode(HttpMode.HTTP_1)
+                )
+            }
+        }
+
+
+    }
 
     fun sendRequestConsiderSettings(httpRequest : HttpRequest) {
         httpRequestExecutor.runTask {

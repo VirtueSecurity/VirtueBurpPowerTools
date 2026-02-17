@@ -6,6 +6,7 @@ import burp.api.montoya.ui.settings.SettingsPanelPersistence
 import com.nickcoblentz.montoya.DisposableEmailScanChecker
 import com.nickcoblentz.montoya.EveryParameter2
 import com.nickcoblentz.montoya.ManualScanIssueManager
+import com.nickcoblentz.montoya.SendUniqueToOrganizer
 import com.nickcoblentz.montoya.settings.PanelSettingsDelegate
 import com.nickcoblentz.montoya.utilities.RetryRequestsMontoya
 import com.nickcoblentz.montoya.utils.CopyRequestResponse
@@ -53,6 +54,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         val montoyaWSUtils = MontoyaWSUtils(api,projectSettings,)
         api.extension().registerUnloadingHandler { montoyaWSUtils.shutdown() }
 //        VariableExtractInjectExtension(api, projectSettings)
+        SendUniqueToOrganizer(api, projectSettings)
 
 
         api.userInterface().registerSettingsPanel(projectSettings.settingsPanel)
@@ -155,6 +157,32 @@ class MyExtensionSettings {
         MontoyaWSUtils.DEFAULT_WS_REQUEST_LIMIT)
 
     val wsBumpWSConnection: Boolean by settingsManager.booleanSetting("WS Utils: Automatically Reconnect to Next WS Connection Matching Upgrade Request", false)
+
+
+
+    val uniqueToOrganizerMapEnabled: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Enable Map", false)
+    val uniqueToOrganizerProxyMapEnabled: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Enable Tool Proxy Map", true)
+    val uniqueToOrganizerRepeaterMapEnabled: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Enable Tool Repeater Map", true)
+    val uniqueToOrganizerExtensionMapEnabled: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Enable Tool Extension Map", false)
+    val uniqueToOrganizerIntruderMapEnabled: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Enable Tool Intruder Map", false)
+    val uniqueToOrganizerIncludeUniqueOnly: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Include Only Unique Requests/Responses", true)
+    val uniqueToOrganizerStatusCodes: String by settingsManager.stringSetting("Send Unique to Organizer: List/Range of Status Codes to include (separated by comma)", "100,200-299,301,302,304")
+    val uniqueToOrganizerUniqueQueryParamsOnly: Boolean by settingsManager.booleanSetting("Send Unique to Organizer: Use query parameters to determine uniqueness", false)
+    val uniqueToOrganizerRequestUniquenessCaptureGroup: String by settingsManager.stringSetting("Send Unique to Organizer: Request Regex Capture Group to Consider for Uniqueness", "")
+    val uniqueToOrganizerResponseUniquenessCaptureGroup: String by settingsManager.stringSetting("Send Unique to Organizer: Response Regex Capture Group to Consider for Uniqueness", "")
+    val uniqueToOrganizerIgnoreRegexMatch: String by settingsManager.stringSetting("Send Unique to Organizer: Regex Match to Ignore From Requests/Responses", "")
+    val uniqueToOrganizerNotesRegexMatchGroups: String by settingsManager.stringSetting("Send Unique to Organizer: Regex Match Groups to Include in the Notes Column", "")
+
+    val uniqueToOrganizerSession1Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 1 (${HighlightColor.MAGENTA.name}) Name", "Anonymous")
+    val uniqueToOrganizerSession2Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 2 (${HighlightColor.BLUE.name}) Name", "Org 1 Admin")
+    val uniqueToOrganizerSession3Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 3 (${HighlightColor.CYAN.name}) Name", "Org 1 Low")
+    val uniqueToOrganizerSession4Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 4 (${HighlightColor.ORANGE.name}) Name", "Org 2 Admin")
+    val uniqueToOrganizerSession5Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 5 (${HighlightColor.YELLOW.name}) Name", "Org 2 Low")
+    val uniqueToOrganizerSession6Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 6 (${HighlightColor.PINK.name}) Name", "Other")
+    val uniqueToOrganizerSelectedSession: String by settingsManager.listSetting("Send Unique to Organizer: Selected Session", mutableListOf<String>("1","2","3","4","5","6"),"1")
+
+
+
 
     val settingsPanel = settingsManager.buildSettingsPanel()
 

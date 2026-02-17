@@ -66,6 +66,9 @@ class MontoyaWSUtils(private val api: MontoyaApi, private val myExtensionSetting
     private fun updateConcurrencyLimit() {
         if (myExtensionSettings.wsRequestLimit != currentThreadLimit) {
             currentThreadLimit = myExtensionSettings.wsRequestLimit
+            if(currentThreadLimit <1) {
+                currentThreadLimit = 1
+            }
             semaphore = Semaphore(currentThreadLimit)
         }
         logger.debugLog("WebSocket Request Limit set to: $currentThreadLimit")
