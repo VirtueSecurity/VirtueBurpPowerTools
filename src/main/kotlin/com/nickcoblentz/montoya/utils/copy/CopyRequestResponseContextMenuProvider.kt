@@ -5,7 +5,6 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.ui.contextmenu.*
 import com.nickcoblentz.montoya.LogLevel
 import com.nickcoblentz.montoya.MontoyaLogger
-import com.nickcoblentz.montoya.utils.CopyRequestResponseHandler.CopyMode
 import kotlinx.coroutines.*
 import java.awt.Component
 import java.awt.Dimension
@@ -45,8 +44,8 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
     private val _CopyURLAndResponseHeaderIncludeJMenuItem = JMenuItem(_CopyURLAndResponseHeaderIncludeName)
     private val _CopyResponseBodyOnlyJMenuItem = JMenuItem(_CopyResponseBodyOnlyName)
     private val _SearchAndExtractJmenuItem = JMenuItem("Search and Extract")
-    private var prettifyJSON = true
-    private val _prettifyJSONCheckBoxMenuItem: JCheckBoxMenuItem = JCheckBoxMenuItem("Prettify JSON",prettifyJSON)
+    private var prettifyBody = true
+    private val _prettifyBodyCheckBoxMenuItem: JCheckBoxMenuItem = JCheckBoxMenuItem("Prettify Body",prettifyBody)
 
     private val _enableNotificationsCheckBoxMenuItem: JCheckBoxMenuItem = JCheckBoxMenuItem("Enable Notifications")
 
@@ -61,10 +60,10 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         _CopyRequestAndResponseIncludeJMenuItem.addActionListener(this)
         _CopyURLAndResponseHeaderIncludeJMenuItem.addActionListener(this)
         _CopyResponseBodyOnlyJMenuItem.addActionListener(this)
-        _prettifyJSONCheckBoxMenuItem.isSelected=prettifyJSON
+        _prettifyBodyCheckBoxMenuItem.isSelected=prettifyBody
 
-        _prettifyJSONCheckBoxMenuItem.addActionListener{e ->
-            prettifyJSON = _prettifyJSONCheckBoxMenuItem.isSelected
+        _prettifyBodyCheckBoxMenuItem.addActionListener{ e ->
+            prettifyBody = _prettifyBodyCheckBoxMenuItem.isSelected
         }
 
         _SearchAndExtractJmenuItem.addActionListener{ e->
@@ -76,7 +75,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         label.font = label.font.deriveFont(Font.BOLD)
         _MenuItemList = listOf(
             label,
-            _prettifyJSONCheckBoxMenuItem,
+            _prettifyBodyCheckBoxMenuItem,
             _CopyRequestAndResponseJMenuItem,
             _CopyRequestAndResponseHeaderJMenuItem,
             _CopyURLAndResponseJMenuItem,
@@ -237,7 +236,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         }
 
         _copyHandler.copyToClipboard(
-            _copyHandler.copyItemsWS(targetWebSocketMessages,true,resolveCopyMode(e.actionCommand),prettifyJSON)
+            _copyHandler.copyItemsWS(targetWebSocketMessages,true,resolveCopyMode(e.actionCommand),prettifyBody)
         )
 
     }
@@ -258,7 +257,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
                 }*/
             }
             _copyHandler.copyToClipboard(
-                _copyHandler.copyItemsHTTP(requestResponses,shouldStripHeaders(e.actionCommand),resolveCopyMode(e.actionCommand),prettifyJSON)
+                _copyHandler.copyItemsHTTP(requestResponses,shouldStripHeaders(e.actionCommand),resolveCopyMode(e.actionCommand),prettifyBody)
             )
         }
     }
@@ -275,7 +274,7 @@ class CopyRequestResponseContextMenuProvider(private val _api: MontoyaApi, priva
         }
 
         _copyHandler.copyToClipboard(
-            _copyHandler.copyItemsHTTP(targetRequestResponses,shouldStripHeaders(e.actionCommand),resolveCopyMode(e.actionCommand),prettifyJSON)
+            _copyHandler.copyItemsHTTP(targetRequestResponses,shouldStripHeaders(e.actionCommand),resolveCopyMode(e.actionCommand),prettifyBody)
         )
     }
 

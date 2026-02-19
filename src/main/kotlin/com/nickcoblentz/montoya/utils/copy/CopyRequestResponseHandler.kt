@@ -16,7 +16,6 @@ import java.awt.datatransfer.ClipboardOwner
 import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.Transferable
 import java.nio.ByteBuffer
-import java.nio.charset.CharsetDecoder
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
@@ -79,25 +78,11 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
     override fun lostOwnership(clipboard: Clipboard, contents: Transferable) {
     }
 
-    fun copyItem(wsMessage : WebSocketMessage, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyJSON: Boolean = true) : String =
+    fun copyItem(wsMessage : WebSocketMessage, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyBody: Boolean = true) : String =
             CopyBuilder()
                 .withUrlWS(wsMessage.upgradeRequest().url(),wsMessage.direction().toString())
-                .withWS(prettifyJSONBody(wsMessage,prettifyJSON)).toString()
+                .withWS(prettifyBody(wsMessage,prettifyBody)).toString()
 
-
-    fun prettifyJSONBody(wsMessage : WebSocketMessage, shouldPrettify : Boolean) : String
-    {
-        if(shouldPrettify) {
-            val wsPayloadString = convertWSPayloadToString(wsMessage.payload())
-            wsPayloadString?.let { payload ->
-                if(_api.utilities().jsonUtils().isValidJson(payload)) {
-                    return JsonNode.jsonNode(payload).toJsonString()
-                }
-            }
-        }
-
-        return wsMessage.payload().toString()
-    }
 
     fun convertWSPayloadToString(payload: ByteArray): String? {
 
@@ -122,30 +107,79 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
         }
     }
 
-    fun copyItemsWS(wsMessages : MutableList<WebSocketMessage>, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyJSON: Boolean = true) : String {
+    fun copyItemsWS(wsMessages : MutableList<WebSocketMessage>, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyBody: Boolean = true) : String {
         if(wsMessages.isNotEmpty()) {
 
             return (wsMessages.map { wsMessage ->
-                copyItem(wsMessage,stripHeaders,copyMode,prettifyJSON)
+                copyItem(wsMessage,stripHeaders,copyMode,prettifyBody)
             }).joinToString("")
         }
         return ""
     }
 
+    private fun prettifyBodyString(body: String, contentType: String? = null, burpContentType: ContentType? = null): String {
+        if (body.isNotBlank()) {
+            // JSON
+            if ((burpContentType == ContentType.JSON ||
+                        contentType?.contains("+json", ignoreCase = true) == true ||
+                        contentType?.contains("/json", ignoreCase = true) == true ||
+                        contentType?.contains("/javascript", ignoreCase = true) == true) &&
+                _api.utilities().jsonUtils().isValidJson(body)
+            ) {
+                return try {
+                    JsonNode.jsonNode(body).toJsonString()
+                } catch (e: Exception) {
+                    body
+                }
+            }
 
-    fun prettifyJSONBody(httpRequest : HttpRequest, shouldPrettify : Boolean) : String
-    {
-        if(shouldPrettify && httpRequest.hasHeader("Content-Type")) {
-            val contentType = httpRequest.headerValue("Content-Type")
+            // XML
+            if ((burpContentType == ContentType.XML ||
+                        contentType?.contains("+xml", ignoreCase = true) == true ||
+                        contentType?.contains("/xml", ignoreCase = true) == true)
+            ) {
+                return try {
+                    val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                    val builder = factory.newDocumentBuilder()
+                    val document = builder.parse(java.io.ByteArrayInputStream(body.toByteArray()))
+                    val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
+                    transformer.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes")
+                    transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
+                    val result = javax.xml.transform.stream.StreamResult(java.io.StringWriter())
+                    val source = javax.xml.transform.dom.DOMSource(document)
+                    transformer.transform(source, result)
+                    result.writer.toString()
+                } catch (e: Exception) {
+                    body
+                }
+            }
+        }
+        return body
+    }
+
+    fun prettifyBody(wsMessage: WebSocketMessage, shouldPrettify: Boolean): String {
+        if (shouldPrettify) {
+            val wsPayloadString = convertWSPayloadToString(wsMessage.payload())
+            wsPayloadString?.let { payload ->
+                val pretty = prettifyBodyString(payload)
+                if (pretty != payload) {
+                    return pretty
+                }
+            }
+        }
+
+        return wsMessage.payload().toString()
+    }
+
+
+    fun prettifyBody(httpRequest: HttpRequest, shouldPrettify: Boolean): String {
+        if (shouldPrettify) {
+            val contentType = if (httpRequest.hasHeader("Content-Type")) httpRequest.headerValue("Content-Type") else null
             val body = httpRequest.bodyToString()
-            if(body.isNotBlank() && ( httpRequest.contentType() == ContentType.JSON ||
-                contentType.contains("+json") ||
-                contentType.contains("/json") ||
-                contentType.contains("/javascript")) &&
-                _api.utilities().jsonUtils().isValidJson(body)) {
+            val prettyBody = prettifyBodyString(body, contentType, httpRequest.contentType())
 
-                val prettyBody = JsonNode.jsonNode(body).toJsonString()
-                val headers = httpRequest.toString().substring(0,httpRequest.bodyOffset())
+            if (prettyBody != body) {
+                val headers = httpRequest.toString().substring(0, httpRequest.bodyOffset())
                 return headers + prettyBody
             }
         }
@@ -153,18 +187,14 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
         return httpRequest.toString()
     }
 
-    fun prettifyJSONBody(httpResponse : HttpResponse, shouldPrettify : Boolean) : String
-    {
-        if(shouldPrettify && httpResponse.hasHeader("Content-Type")) {
-            val contentType = httpResponse.headerValue("Content-Type")
+    fun prettifyBody(httpResponse: HttpResponse, shouldPrettify: Boolean): String {
+        if (shouldPrettify) {
+            val contentType = if (httpResponse.hasHeader("Content-Type")) httpResponse.headerValue("Content-Type") else null
             val body = httpResponse.bodyToString()
-            if(body.isNotBlank() && (contentType.contains("+json") ||
-                        contentType.contains("/json") ||
-                        contentType.contains("/javascript")) &&
-                _api.utilities().jsonUtils().isValidJson(body)) {
+            val prettyBody = prettifyBodyString(body, contentType)
 
-                val prettyBody = JsonNode.jsonNode(body).toJsonString()
-                val headers = httpResponse.toString().substring(0,httpResponse.bodyOffset())
+            if (prettyBody != body) {
+                val headers = httpResponse.toString().substring(0, httpResponse.bodyOffset())
                 return headers + prettyBody
             }
         }
@@ -172,7 +202,7 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
         return httpResponse.toString()
     }
 
-    fun copyItem(requestResponse : HttpRequestResponse, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull,prettifyJSON: Boolean = true) : String {
+    fun copyItem(requestResponse : HttpRequestResponse, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyBody: Boolean = true) : String {
         return (
             CopyBuilder().apply {
                 if(copyMode!= CopyMode.ResponseBody)
@@ -181,7 +211,7 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
                     val request =
                         if (stripHeaders) stripHeaders(requestResponse.request()) else requestResponse.request()
 
-                    withHTTP(prettifyJSONBody(request,prettifyJSON))
+                    withHTTP(prettifyBody(request,prettifyBody))
                 }
 
                 if(requestResponse.hasResponse()) {
@@ -191,16 +221,16 @@ class CopyRequestResponseHandler (private val _api: MontoyaApi) : ClipboardOwner
                     else if(copyMode == CopyMode.URLResponseHeaders || copyMode == CopyMode.RequestFullResponseHeaders)
                         withHTTP(response.toString().substring(0,response.bodyOffset()))
                     else
-                        withHTTP(prettifyJSONBody(response,prettifyJSON))
+                        withHTTP(prettifyBody(response,prettifyBody))
                 }
             }.toString())
     }
 
-    fun copyItemsHTTP(requestResponses : MutableList<HttpRequestResponse>, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyJSON: Boolean = true) : String {
+    fun copyItemsHTTP(requestResponses : MutableList<HttpRequestResponse>, stripHeaders: Boolean = true, copyMode : CopyMode=CopyMode.RequestFullResponseFull, prettifyBody: Boolean = true) : String {
         if(requestResponses.isNotEmpty()) {
 
             return (requestResponses.map { requestResponse ->
-                copyItem(requestResponse,stripHeaders,copyMode,prettifyJSON)
+                copyItem(requestResponse,stripHeaders,copyMode,prettifyBody)
             }).joinToString("")
         }
 
