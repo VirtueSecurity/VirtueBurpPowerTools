@@ -109,6 +109,11 @@ Provides a quick way to log manual scan issues directly into Burp's "Dashboard" 
 Uses the Anomaly Rank feature in burp to help identify "interesting" or "anomalous" requests. This version will add a note to each selected item with the rank value. 
 - Modes include applying ranks to all, unique URL, or unique URL+Verb combinations.
 
+
+### 11. Disposable Email Passive Scan Check
+
+Identifies the use of disposable, anonymous emails in HTTP responses and adds a scan issue for any detected.
+
 ---
 
 ## Configuration
