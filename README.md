@@ -1,60 +1,112 @@
 # Virtue Burp Power Tools
 
-Virtue Burp Power Tools is a Burp Extension (Using Montoya API) produced by [Virtue Security](https://www.virtuesecurity.com) that we use in our penetration tests to support probing applications for vulnerabilities, providing custom session handling, and supporting extraction of information for documentation in Markdown format. The features include:
+Virtue Burp Power Tools is a comprehensive collection of Burp Suite Pro extensions (built using the Montoya API and Kotlin) developed by Nick Coblentz at [Virtue Security](https://www.virtuesecurity.com). This toolkit is designed for testers to help them streamline the penetration testing process by automating test cases but allowing for manual review of the results, automating repetitive tasks, handling complex sessions handling, and efficiently extracting information for Markdown-based reporting.
 
-- Right-Click Context Menu:
-  - Copy one or more requests and responses to support pasting the information as Markdown into notes or reports
-    - Variety of copy modes ranging from copying the entire request and response to capturing just the URLs or headers
-  - Select one or more requests and resend them, observing their result in the "logger" tab
-    - This supports using session handling rules to manipulate requests at scale and observe the results
-  - Select one or more requests and attempt standard and non-existent HTTP verbs for each URL and observe the results in the "logger" tab
-  - Add or exclude the base URL of selected requests to the scope for the project
-  - Send multiple requests to organizer (historically, Burp only lets you do one at a time)
-  - Send multiple requests to repeater and automatically name the tabs based on the HTTP Verb and Path
-  - Configure JWT handling logic plus provide a session handling "action" to watch for changes in tokens and automatically add them to new requests for various tools
-  - Use one or more requests as a base to launch a wide variety of test cases against an end-point and observe the results in the "logger" tab
+## Key Features & Extensions
+
+![img.png](img.png)
+
+### 1. Match/Replace Session Handling Rule
+Allows for multi-line regex match replace in requests and responses using session handling rules.
+
+- **Session Handling Action**: Can be registered as a Burp Session Handling Action to automatically modify requests in real-time based on your rules.
+
+### 2. Every Parameter
+
+A powerful tool to launch common test cases across all parameters (URL, Body, JSON, Headers, Cookies) of one or more requests.
+- **Payloads Included**:
+  - **Authorization Tests**: Test for IDOR or permission bypass.
+  - **SQLi (Concat, Logic, Error)**: Automated probing for various SQL injection types.
+  - **XSS (Blind Img, Payloads)**: Test for reflected and stored XSS.
+  - **Collab Url**: Inject Burp Collaborator URLs to detect out-of-band interactions.
+  - **Spoof IP Using Headers**: Automatically add common IP-spoofing headers (e.g., `X-Forwarded-For`).
+  - **XML OutOfBand**: Test for XXE and other XML-based vulnerabilities.
+- **Logger Integration**: Use the dedicated "Logger" tab to review results
+  - Includes Bambdas (you must add them from the library as logger columns) to extract out the Test Case Category, Name, Parameter, Payload, etc.
+
+![img_2.png](img_2.png)
+
+### 3. AutoName
+Provides Some Additional Functionality On Top Of Sending Items to Repeater/Organizer
+- **Send To Repeater & Auto Name**: Sends requests to Repeater and automatically names the tabs based on the HTTP method and path (e.g., `GET /api/v1/user`).
+- **Send To Organizer: Highlight as Note**: Send an item to organizer, but add whatever text is selected in the request/response as a note.
+- **Send Unique (various options) to Organizer**: In Logger, you can't add notes (a bug). If you want to apply anomaly rank, you have to send it to organizer first and then run anomaly rank and output the results in the notes column. These options automate that and give multiple options for how those requests/responses are grouped.
+- **Add/Exclude Base URL to/from Scope**: Used when beginning an assessment to quickly add/remove items to scope without having to flip back to the Target → Scope Tab
+
+### 4. Retry
+Utilities for re-issuing requests (view the results in the logger tab) applying any session handling rules you've defined
+- **RetryRequests**: Re-send selected requests to observe results in the logger.
+- **RetryVerbs**: Automatically test multiple HTTP verbs (GET, POST, PUT, DELETE, etc.) against a single endpoint. Variants include options for Content-Length and JSON-specific bodies.
+
+### 5. WebSocket Utilities
+Enhancements for testing WebSocket-enabled applications.
+- **List Open WS Connections**: Utility function to list currently open WebSocket connections.
+- **Retry WS**: Resend a WebSocket Request (applying session handling rules)
+- **Show Upgrade Request**: Popup and HTTP request/response window with the upgrade request used to create the WS Connection
+- **Intruder: Integers**: Allows you to perform intruder like functionality (currently only iterating through integers) for the selected WS Payload, selecting an existing open WS Connection to send it through. This is different from other WS extensions in that you don't have to resend the upgrade request and mess with logging in and being authorized. Instead, you select an existing open connection.
+
+![img_3.png](img_3.png)
+
+![img_4.png](img_4.png)
+
+### 6. Copy (Markdown Reporting)
+Optimized for penetration testers who use Markdown for documentation.
+- **Multiple Copy Modes** (examples):
+  - Full Request/Response
+  - URL, Response
+  - URL, Response Headers
+  - Full Request/Response (incl. all)
+  - Response Body only
+  - Request and/or Response Headers only
+  - Search and Extract (regex across multiple items)
+- **Prettify Body**: Automatically formats JSON/XML bodies for better readability in notes.
+
+### 7. Session Access Token
+Simplifies JWT and Bearer token management during testing.
+- **Passive Extraction**: Watches responses for access tokens (via regex) and updates them globally.
+- **Active Replacement**: Automatically injects the latest token into requests via a Session Handling rule.
+- **Macro Support**: Integrates with Burp Login Macros to automatically refresh tokens when a session is invalidated (requires setup on your part).
+
+#### Using with Session Handling Rules
+1. In Burp settings, create a new Session Handling Rule.
+2. Add action: "Invoke a Burp Extension" → select `Access Token Helper`.
+3. In the helper settings, optionally enable "Use Passively For All Requests?" and configure scope/tools.
+
+#### Using with a Login Macro (Auto-refresh on invalid session)
+1. Record a Login Macro that authenticates to the target.
+2. Ensure the login response contains a token that matches your configured regex (default expects `"access_token":"..."`).
+3. Create a second Session Handling Rule using "Check session is valid".
+   - Choose "Issue current request" and define validity checks.
+   - If invalid: "Run a macro" → select your Login Macro.
+   - After running the macro: "Invoke a Burp extension handler" → `Access Token Helper`.
+
+### 8. Manual Issue
+Provides a quick way to log manual scan issues directly into Burp's "Dashboard" or "Issues" view, ensuring that manually discovered vulnerabilities are tracked alongside automated findings.
+
+### 9. Anomaly Rank
+Uses the Anomaly Rank feature in burp to help identify "interesting" or "anomalous" requests. This version will add a note to each selected item with the rank value. 
+- Modes include applying ranks to all, unique URL, or unique URL+Verb combinations.
+
+---
+
+## Configuration
+
+![img_1.png](img_1.png)
+
+---
 
 ## Setup
 
 ### Building the Extension
+1. Clone the repository.
+2. Build the JAR file using Gradle:
+   - **Linux/macOS**: `./gradlew shadowJar`
+   - **Windows**: `gradlew.bat shadowJar`
+3. The resulting JAR will be located at: `build/libs/VirtueBurpPowerTools-x.y.z-all.jar`.
 
-Build this plugin by cloning the repository and then running:
+### Installation
+1. In Burp Suite, go to the **Extensions** tab.
+2. Click **Add**.
+3. Select **Java** as the extension type.
+4. Choose the generated JAR file and click **Next**.
 
-- Linux: `gradlew shadowJar`
-- Windows: `gradlew.bat shadowJar`
-
-This command will create a jar file in the `build/libs` directory called `VirtueBurpPowerTools-x.y.z-all.jar` where `x.y.z` is the version number of the plugin.
-
-### Adding the Extension to Burp Suite
-
-1. Open Burp Suite
-2. Click the "Extensions" tab
-3. Click "Add"
-4. For "Extension Type", choose "Java"
-5. Click the "Select File" button, and choose the `VirtueBurpPowerTools-x.y.z-all.jar` from above
-
-## Usage
-
-### Session Handling Features
-
-#### Using the plugin as a Session Handling Action
-
-This mode of operation will watch for access tokens and apply them to any request covered by your session handling rule as described below
-
-- In the session handling rules within Burp Suite's settings, Add a new rule, and add the action: "Invoke a Burp Extension". Choose "Access Token Helper"
-- In the Session Access Token Helper's settings, check mark "Use Passively For All Requests?"`
-- Configure your scope and tools you want it to apply to
-
-#### Using the plugin with a Login Macro
-
-This mode of operation tries to apply the access token to all new requests, and if the request fails you "check session is valid" rule, it uses a login macro you define, obtains the access token from that macro, and applies it to the request and re-issues it.
-
-- Record a macro that logs into an application (this is a core feature of burp suite and is beyond the scope of this document)
-- Verify the json returning has `"access_token":"access token here"` in the response (or a custom pattern you change in this plugin's settings)
-- In the session handling rules within Burp Suite's settings, Add a new rule, and add the action: "Invoke a Burp Extension". Choose "Access Token Helper"
-- Configure your scope and tools you want it to apply to
-- Create a second session rule using the "check session is valid" rule
-    - Select "Issue Current Request"
-    - Configure the "inspect response to determine session validity" to identify responses indicating you are no longer logged into the application
-    - Select "if session is invalid, perform the action below", "Run a macro", Choose the login macro you created above
-    - Select "After running the macro, invoke a burp extension handler", and select "Access Token Helper" 
