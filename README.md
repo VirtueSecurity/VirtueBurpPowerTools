@@ -61,6 +61,7 @@ Optimized for penetration testers who use Markdown for documentation.
   - Request and/or Response Headers only
   - Search and Extract (regex across multiple items)
 - **Prettify Body**: Automatically formats JSON/XML bodies for better readability in notes.
+- **Search and Extract**: Allows you to select multiple HTTP requests/responses and then use multi-line Regex with capture groups to search and extract out the data in those capture groups. 
 
 ### 7. Session Access Token
 Simplifies JWT and Bearer token management during testing.
