@@ -33,6 +33,7 @@ Provides Some Additional Functionality On Top Of Sending Items to Repeater/Organ
 - **Send Unique (various options) to Organizer**: In Logger, you can't add notes (a bug). If you want to apply anomaly rank, you have to send it to organizer first and then run anomaly rank and output the results in the notes column. These options automate that and give multiple options for how those requests/responses are grouped.
 - **Add/Exclude Base URL to/from Scope**: Used when beginning an assessment to quickly add/remove items to scope without having to flip back to the Target → Scope Tab
 
+
 ### 4. Retry
 Utilities for re-issuing requests (view the results in the logger tab) applying any session handling rules you've defined
 - **RetryRequests**: Re-send selected requests to observe results in the logger.
@@ -66,6 +67,26 @@ Simplifies JWT and Bearer token management during testing.
 - **Passive Extraction**: Watches responses for access tokens (via regex) and updates them globally.
 - **Active Replacement**: Automatically injects the latest token into requests via a Session Handling rule.
 - **Macro Support**: Integrates with Burp Login Macros to automatically refresh tokens when a session is invalidated (requires setup on your part).
+
+### 8. Automatic Send Unique to Organizer
+Instead of manually sending unique items to organizer through the right-click context menu, you can use the extension settings to automatically send request/response pairs to organizer if they are unique. This feature can be enabled through the extension settings.
+
+![img_5.png](img_5.png)
+
+- **Enable Map**: Turns on the functionality (named thus because it's used when mapping the application)
+- **Enabled Tools**: Select which tools you want it to watch for unique request/responses
+- **Include Only Unique**: If you uncheck this, it will send all request/responses regardless of whether its unique
+- Filtering Options (choose which items to include or ignore):
+  - Status Codes
+  - Regex to ignore requests/responses
+- Configurable Uniqueness Factors
+  - Consider query parameters in uniqueness calculation
+  - Use regex match groups for the request/response to extract data and consider for uniqueness
+- Data Extraction
+  - Regex match group to extract and add as a note in organizer
+- User Sessions (Differentiate between which user you are mapping the application with)
+  - Labels and colors (automatic highlight in organizer after 30 seconds - yep this is a workaround for a bug in Burp) for sessions 1-6
+  - Select which session number you want to attribute activity to
 
 #### Using with Session Handling Rules
 1. In Burp settings, create a new Session Handling Rule.
