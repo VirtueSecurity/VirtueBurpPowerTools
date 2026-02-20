@@ -68,6 +68,20 @@ Simplifies JWT and Bearer token management during testing.
 - **Active Replacement**: Automatically injects the latest token into requests via a Session Handling rule.
 - **Macro Support**: Integrates with Burp Login Macros to automatically refresh tokens when a session is invalidated (requires setup on your part).
 
+#### Using with Session Handling Rules
+1. In Burp settings, create a new Session Handling Rule.
+2. Add action: "Invoke a Burp Extension" → select `Access Token Helper`.
+3. In the helper settings, optionally enable "Use Passively For All Requests?" and configure scope/tools.
+
+#### Using with a Login Macro (Auto-refresh on invalid session)
+1. Record a Login Macro that authenticates to the target.
+2. Ensure the login response contains a token that matches your configured regex (default expects `"access_token":"..."`).
+3. Create a second Session Handling Rule using "Check session is valid".
+   - Choose "Issue current request" and define validity checks.
+   - If invalid: "Run a macro" → select your Login Macro.
+   - After running the macro: "Invoke a Burp extension handler" → `Access Token Helper`.
+
+
 ### 8. Automatic Send Unique to Organizer
 Instead of manually sending unique items to organizer through the right-click context menu, you can use the extension settings to automatically send request/response pairs to organizer if they are unique. This feature can be enabled through the extension settings.
 
@@ -87,19 +101,6 @@ Instead of manually sending unique items to organizer through the right-click co
 - User Sessions (Differentiate between which user you are mapping the application with)
   - Labels and colors (automatic highlight in organizer after 30 seconds - yep this is a workaround for a bug in Burp) for sessions 1-6
   - Select which session number you want to attribute activity to
-
-#### Using with Session Handling Rules
-1. In Burp settings, create a new Session Handling Rule.
-2. Add action: "Invoke a Burp Extension" → select `Access Token Helper`.
-3. In the helper settings, optionally enable "Use Passively For All Requests?" and configure scope/tools.
-
-#### Using with a Login Macro (Auto-refresh on invalid session)
-1. Record a Login Macro that authenticates to the target.
-2. Ensure the login response contains a token that matches your configured regex (default expects `"access_token":"..."`).
-3. Create a second Session Handling Rule using "Check session is valid".
-   - Choose "Issue current request" and define validity checks.
-   - If invalid: "Run a macro" → select your Login Macro.
-   - After running the macro: "Invoke a Burp extension handler" → `Access Token Helper`.
 
 ### 9. Manual Issue
 Provides a quick way to log manual scan issues directly into Burp's "Dashboard" or "Issues" view, ensuring that manually discovered vulnerabilities are tracked alongside automated findings.
