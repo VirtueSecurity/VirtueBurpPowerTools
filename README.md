@@ -101,10 +101,10 @@ Instead of manually sending unique items to organizer through the right-click co
    - If invalid: "Run a macro" → select your Login Macro.
    - After running the macro: "Invoke a Burp extension handler" → `Access Token Helper`.
 
-### 8. Manual Issue
+### 9. Manual Issue
 Provides a quick way to log manual scan issues directly into Burp's "Dashboard" or "Issues" view, ensuring that manually discovered vulnerabilities are tracked alongside automated findings.
 
-### 9. Anomaly Rank
+### 10. Anomaly Rank
 Uses the Anomaly Rank feature in burp to help identify "interesting" or "anomalous" requests. This version will add a note to each selected item with the rank value. 
 - Modes include applying ranks to all, unique URL, or unique URL+Verb combinations.
 
