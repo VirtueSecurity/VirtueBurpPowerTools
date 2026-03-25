@@ -34,7 +34,8 @@ enum class NotSentToOrganizerReason {
     IGNORE_REGEX,
     WRONG_STATUS_CODE,
     BLANK_RESPONSE,
-    MAP_DISABLED
+    MAP_DISABLED,
+    UNKNOWN
 }
 
 class PossibleUniqueItemForOrganizer(val sessionId: String, val request: HttpRequest, val response: HttpResponse, val includeGetParams: Boolean, var requestRegex: String?=null, var responseRegex: String?=null) {
@@ -161,16 +162,16 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
             }
         }
 
-        scope.launch {
-            for(item in taskQueue) {
-                try {
-                    processItem(item)
-                }
-                catch(e: Exception) {
-                    logger.errorLog("Exception while processing HttpResponseReceived item:\n${e.message}\n${e.stackTrace}")
-                }
-            }
-        }
+//        scope.launch {
+//            for(item in taskQueue) {
+//                try {
+//                    processItem(item)
+//                }
+//                catch(e: Exception) {
+//                    logger.errorLog("Exception while processing HttpResponseReceived item:\n${e.message}\n${e.stackTrace}")
+//                }
+//            }
+//        }
 
         scope.launch {
             while (isActive) {
@@ -198,7 +199,69 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
         logger.debugLog("Finished loading the $pluginName extension...")
     }
 
-    private fun processItem(responseReceived: HttpResponseReceived) {
+//    private fun processItem(responseReceived: HttpResponseReceived) {
+//
+//        var modifiedAnnotations = responseReceived.annotations()
+//        val responseString = responseReceived.toString()
+//        val request = responseReceived.initiatingRequest()
+//        val requestString = request.toString()
+//        val ignoreRegex = Regex(myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch,regexOptions)
+//        var notSentReason = "None"
+//
+//
+//        if(myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch.isBlank() ||
+//           !responseString.matches(ignoreRegex) ||
+//           !requestString.matches(ignoreRegex)) {
+//
+//            val possibleItem = PossibleUniqueItemForOrganizer(myExtensionSettings.uniqueToOrganizerSelectedSession,
+//                request,
+//                responseReceived,
+//                myExtensionSettings.uniqueToOrganizerUniqueQueryParamsOnly,
+//                myExtensionSettings.uniqueToOrganizerRequestUniquenessCaptureGroup,
+//                myExtensionSettings.uniqueToOrganizerResponseUniquenessCaptureGroup)
+//
+//            val hash = possibleItem.buildHashFromFields()
+//
+//            if(!myExtensionSettings.uniqueToOrganizerIncludeUniqueOnly || !concurrentSetRequestResponses.contains(hash)) {
+//
+//                concurrentSetRequestResponses.add(hash)
+//                val notes = buildList {
+//                    if(possibleItem.requestCaptureGroups.isNotBlank()) {
+//                        add(possibleItem.requestCaptureGroups)
+//                    }
+//                    if(possibleItem.responseCaptureGroups.isNotBlank()) {
+//                        add(possibleItem.responseCaptureGroups)
+//                    }
+//                    add("Session: ${possibleItem.sessionId} (${resolveSessionToName()})")
+//                }
+//                modifiedAnnotations=Annotations.annotations().withNotes(notes.joinToString("; ")).withHighlightColor(resolveSessionToHighlightColor())
+//                api.organizer().sendToOrganizer(HttpRequestResponse.httpRequestResponse(request,responseReceived,modifiedAnnotations))
+//
+//            }
+//            else {
+//                notSentReason = NotSentToOrganizerReason.NOT_UNIQUE.name
+//                val annotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.NOT_UNIQUE)
+//                responseReceived.annotations().setNotes(annotations.notes())
+//                responseReceived.annotations().setHighlightColor(annotations.highlightColor())
+//
+//            }
+//
+//        }
+//        else {
+//            notSentReason=NotSentToOrganizerReason.IGNORE_REGEX.name
+//            val annotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.IGNORE_REGEX)
+//            responseReceived.annotations().setNotes(annotations.notes())
+//            responseReceived.annotations().setHighlightColor(annotations.highlightColor())
+//
+//        }
+//
+//
+//
+//        logger.debugLog("Sent to Organizer? [$notSentReason]: ${request.url()}")
+//
+//    }
+
+    private fun processItemSync(responseReceived: HttpResponseReceived) : Annotations {
 
         var modifiedAnnotations = responseReceived.annotations()
         val responseString = responseReceived.toString()
@@ -209,8 +272,8 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
 
         if(myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch.isBlank() ||
-           !responseString.matches(ignoreRegex) ||
-           !requestString.matches(ignoreRegex)) {
+            !responseString.matches(ignoreRegex) ||
+            !requestString.matches(ignoreRegex)) {
 
             val possibleItem = PossibleUniqueItemForOrganizer(myExtensionSettings.uniqueToOrganizerSelectedSession,
                 request,
@@ -239,20 +302,26 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
             }
             else {
                 notSentReason = NotSentToOrganizerReason.NOT_UNIQUE.name
+                modifiedAnnotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.NOT_UNIQUE)
+
+
             }
 
         }
         else {
             notSentReason=NotSentToOrganizerReason.IGNORE_REGEX.name
+            modifiedAnnotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.IGNORE_REGEX)
+
+
         }
 
 
-        logger.debugLog("Not Sent to Organizer [$notSentReason]: ${request.url()}")
-        responseReceived.annotations().setNotes("Not sent to Organizer: $notSentReason")
-        responseReceived.annotations().setHighlightColor(HighlightColor.YELLOW)
 
+        logger.debugLog("Sent to Organizer? [$notSentReason]: ${request.url()}")
+        return modifiedAnnotations
 
     }
+
     fun resolveSessionToHighlightColor() : HighlightColor {
         return resolveHighlightColor(myExtensionSettings.uniqueToOrganizerSelectedSession)
     }
@@ -302,9 +371,11 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
                           ) {
 
                           if(statusCodeMatches(responseReceived.statusCode())) {
-                              scope.launch {
-                                  taskQueue.send(responseReceived)
-                              }
+//                              scope.launch {
+//                                  taskQueue.send(responseReceived)
+//                              }
+                              modifiedAnnotations = processItemSync(responseReceived)
+
                           }
                           else {
                               modifiedAnnotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.WRONG_STATUS_CODE)

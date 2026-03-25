@@ -1,11 +1,11 @@
 plugins {
     // Provides Kotlin Language Support
     // https://plugins.gradle.org/plugin/org.jetbrains.kotlin.jvm
-    kotlin("jvm") version "2.3.0"
+    kotlin("jvm") version "2.3.20"
 
     // Provides the shadowJar task in Gradle
-    // https://plugins.gradle.org/plugin/com.github.johnrengelman.shadow
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    // https://plugins.gradle.org/plugin/com.gradleup.shadow
+    id("com.gradleup.shadow") version "9.4.0"
 
 }
 
