@@ -130,7 +130,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
         }
 
         scope.launch {
-            while (isActive) {
+            if (isActive) {
 
                     api.organizer().items().filter{ item -> item.annotations().hasNotes() && item.annotations().notes()!=null && item.annotations().notes().contains("Session: ") }.forEach { item ->
                         try {
