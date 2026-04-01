@@ -38,8 +38,8 @@ class EveryParamHttpRequestEditor(private val api: MontoyaApi) : ExtensionProvid
     override fun isEnabledFor(requestResponse: HttpRequestResponse?): Boolean {
         val foundHeaders = requestResponse?.request()?.headers()?.map { it.name() }
         val lowerTestCaseHeaders = EveryParameter2.allTestCaseHeaders.map { it.lowercase() }
-        logger.debugLog("req header names: $foundHeaders")
-        logger.debugLog("EveryParameter2.allTestCaseHeaders: $lowerTestCaseHeaders")
+        //logger.debugLog("req header names: $foundHeaders")
+        //logger.debugLog("EveryParameter2.allTestCaseHeaders: $lowerTestCaseHeaders")
 
         return foundHeaders != null && (lowerTestCaseHeaders.any { it in foundHeaders})
     }
