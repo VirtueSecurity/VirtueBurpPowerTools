@@ -26,9 +26,19 @@ class EveryParamHttpRequestEditor(private val api: MontoyaApi) : ExtensionProvid
     override fun setRequestResponse(requestResponse: HttpRequestResponse?) {
         requestResponse?.let { reqRes ->
             _requestResponse = reqRes
+            val requestString = reqRes.request().toString()
             val decodedRequest = EveryParameter2.allTestCaseHeaders.fold(reqRes.request()) { req, item ->
-                val encodedValue = req.headerValue(item)
-                req.withUpdatedHeader(item, api.utilities().base64Utils().decode(encodedValue).toString())
+                if (requestString.contains(item, ignoreCase = true)) {
+                    val encodedValue = req.headerValue(item)
+                    if(encodedValue != null) {
+                        req.withUpdatedHeader(item, api.utilities().base64Utils().decode(encodedValue).toString())
+                    }
+                    else {
+                        req
+                    }
+                } else {
+                    req
+                }
             }
             editor.request=decodedRequest
             editor.setCaretPosition(decodedRequest.toString().lastIndexOf("Z-Test-Case-"))
@@ -36,12 +46,8 @@ class EveryParamHttpRequestEditor(private val api: MontoyaApi) : ExtensionProvid
     }
 
     override fun isEnabledFor(requestResponse: HttpRequestResponse?): Boolean {
-        val foundHeaders = requestResponse?.request()?.headers()?.map { it.name() }
-        val lowerTestCaseHeaders = EveryParameter2.allTestCaseHeaders.map { it.lowercase() }
-        //logger.debugLog("req header names: $foundHeaders")
-        //logger.debugLog("EveryParameter2.allTestCaseHeaders: $lowerTestCaseHeaders")
-
-        return foundHeaders != null && (lowerTestCaseHeaders.any { it in foundHeaders})
+        val requestString = requestResponse?.request()?.toString() ?: return false
+        return EveryParameter2.allTestCaseHeaders.any { requestString.contains(it, ignoreCase = true) }
     }
 
 
