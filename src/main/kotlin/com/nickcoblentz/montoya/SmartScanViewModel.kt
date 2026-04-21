@@ -180,10 +180,10 @@ class SmartScanViewModel(
         val avgRespTimes = mutableListOf<Double>()
 
         // Group metrics by the second they occurred in
-        val metricsInWindow = allMetrics.filter { it.timestamp >= startTime && it.timestamp < now }
+        val metricsInWindow = allMetrics.filter { it.timestamp >= startTime && it.timestamp <= now }
         val metricsBySecond = metricsInWindow.groupBy { it.timestamp.truncatedTo(java.time.temporal.ChronoUnit.SECONDS) }
 
-        for (i in 0 until windowSeconds) {
+        for (i in 0..windowSeconds) {
             val secondStart = startTime.plusSeconds(i.toLong()).truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
             val metricsInSecond = metricsBySecond[secondStart] ?: emptyList()
             

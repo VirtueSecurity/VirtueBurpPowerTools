@@ -117,7 +117,9 @@ class AIHTTPHandler(
                                 lastSessionFetchTime = System.currentTimeMillis()
                             }
                         }
-                    } catch (e: Exception) {}
+                    } catch (e: Exception) {
+                        logger.errorLog("${e.message}:\n${e.stackTrace}")
+                    }
                 }
             }
         }

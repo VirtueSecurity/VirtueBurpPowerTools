@@ -380,7 +380,14 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
             data.forEachIndexed { sIdx, points ->
                 if (sIdx >= series.size) return@forEachIndexed
                 g2.color = series[sIdx].color
-                g2.stroke = BasicStroke(2f)
+                
+                // Use different stroke styles for different series if they overlap
+                // Total (sIdx 0) is thickest, others are standard
+                if (sIdx == 0) {
+                    g2.stroke = BasicStroke(2f)
+                } else {
+                    g2.stroke = BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, if (sIdx % 2 == 0) floatArrayOf(5f, 5f) else null, 0f)
+                }
                 
                 val xStep = w.toDouble() / (points.size - 1).coerceAtLeast(1)
                 

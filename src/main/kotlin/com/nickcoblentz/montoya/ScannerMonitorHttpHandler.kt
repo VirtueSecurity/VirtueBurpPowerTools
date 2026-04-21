@@ -17,10 +17,9 @@ class ScannerMonitorHttpHandler(
 
     override fun handleHttpResponseReceived(responseReceived: HttpResponseReceived): ResponseReceivedAction {
         if (responseReceived.toolSource().isFromTool(ToolType.SCANNER)) {
-            val httpRequestResponse = responseReceived as? HttpRequestResponse
-            val response = httpRequestResponse?.response()
+            val response = (responseReceived as? HttpRequestResponse)?.response()
             val statusCode = response?.statusCode()?.toInt() ?: -1
-            val timing = httpRequestResponse?.timingData()
+            val timing = (responseReceived as? HttpRequestResponse)?.timingData()
             
             var durationMs = -1L
             timing?.ifPresent { t ->
