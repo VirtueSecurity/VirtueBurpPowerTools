@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
+import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.readText
 import kotlin.time.Duration.Companion.seconds
 
@@ -92,58 +93,33 @@ class AIHTTPHandler(
             return RequestToBeSentAction.continueWith(requestToBeSent)
         }
 
-        var waitCount = 0
-        var sessionData = getProjectJsonSession()
-        while(sessionData!=null && !sessionData.authenticated && waitCount < 30) {
-            waitCount++
-            logger.debugLog("Waiting for authentication... ($waitCount/30)")
-            // Use a shorter sleep to allow more frequent checks without blocking for too long if auth happens quickly, 
-            // but still, it's a block. Given the requirement, we'll keep it but maybe optimize the check.
-            Thread.sleep(1000L)
+        val sessionData = getProjectJsonSession()
+        
+        if (sessionData == null || !sessionData.authenticated) {
+            val errorMessage = "AI Session Handler: Authentication missing or session data not available. Request sent without AI session modifications: ${requestToBeSent.url()}"
             
-            // Bypass cache for the wait loop to detect auth as soon as possible (at most 1s delay)
-            val pathStr = myExtensionSettings.aiSessionHandlerProjectJSONPath
-            if(pathStr.isNotBlank()) {
-                val path = Path.of(pathStr)
-                if(path.exists()) {
-                    try {
-                        val text = path.readText()
-                        val projectJsonObject = json.parseToJsonElement(text).jsonObject
-                        val sessionElement = projectJsonObject["sessions"]
-                        if(sessionElement!=null) {
-                            sessionData = json.decodeFromJsonElement<SessionData>(sessionElement)
-                            if (sessionData.authenticated) {
-                                lastSessionData = sessionData
-                                lastSessionFetchTime = System.currentTimeMillis()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        logger.errorLog("${e.message}:\n${e.stackTrace}")
-                    }
-                }
-            }
-        }
-
-        if(waitCount > 0) {
-            logger.warnLog("Total wait time for authentication: $waitCount seconds")
-        }
-
-        if(sessionData != null && !sessionData.authenticated && waitCount >= 30) {
-            logger.errorLog("Authentication timed out after 30 seconds")
+            // 1. Extension Log (via MontoyaLogger)
+            logger.errorLog(errorMessage)
+            
+            // 2. Burp Event Log
+            api.logging().raiseInfoEvent(errorMessage)
+            
+            // 3. SmartScan Log (via ViewModel)
+            viewModel?.logError(errorMessage)
+            
+            return RequestToBeSentAction.continueWith(requestToBeSent)
         }
 
         var httpRequest: HttpRequest = requestToBeSent
-        sessionData?.let { data ->
-            if (data.authenticated) {
-                data.cookies.forEach { (name, value) ->
-                    val cookieParam = HttpParameter.cookieParameter(name, value)
-                    logger.debugLog("Adding cookie: $name: $value")
-                    httpRequest = httpRequest.withParameter(cookieParam)
-                }
-                data.headers.forEach { (name, value) ->
-                    logger.debugLog("Adding header: $name: $value")
-                    httpRequest = httpRequest.withAddedOrUpdatedHeader(name, value)
-                }
+        sessionData.let { data ->
+            data.cookies.forEach { (name, value) ->
+                val cookieParam = HttpParameter.cookieParameter(name, value)
+                logger.debugLog("Adding cookie: $name: $value")
+                httpRequest = httpRequest.withParameter(cookieParam)
+            }
+            data.headers.forEach { (name, value) ->
+                logger.debugLog("Adding header: $name: $value")
+                httpRequest = httpRequest.withAddedOrUpdatedHeader(name, value)
             }
         }
         return RequestToBeSentAction.continueWith(httpRequest)
@@ -155,6 +131,7 @@ class AIHTTPHandler(
 
     private var lastSessionData: SessionData? = null
     private var lastSessionFetchTime: Long = 0
+    private var lastFileModifiedTime: Long = 0
     private val SESSION_CACHE_DURATION_MS = 1000L
 
     private fun getProjectJsonSession() : SessionData? {
@@ -169,14 +146,22 @@ class AIHTTPHandler(
         if(!path.exists()) {
             logger.errorLog("Couldn't parse project.json: ${path.toString()} does not exist")
             viewModel?.logError("AI HTTP Handler: project.json does not exist at $pathStr")
+            lastSessionFetchTime = now // Still update time to avoid spamming the error
             return null
         }
         
         try {
+            val currentModifiedTime = Files.getLastModifiedTime(path).toMillis()
+            if (currentModifiedTime == lastFileModifiedTime && lastSessionData != null) {
+                lastSessionFetchTime = now
+                return lastSessionData
+            }
+
             val text = path.readText()
             if(text.isBlank()) {
                 logger.errorLog("Couldn't parse project.json: ${path.toString()} is blank")
                 viewModel?.logError("AI HTTP Handler: project.json is blank at $pathStr")
+                lastSessionFetchTime = now
                 return null
             }
 
@@ -186,17 +171,20 @@ class AIHTTPHandler(
                 val data = json.decodeFromJsonElement<SessionData>(sessionElement)
                 lastSessionData = data
                 lastSessionFetchTime = now
+                lastFileModifiedTime = currentModifiedTime
                 return data
             }
             else {
                 logger.errorLog("Couldn't parse project.json: session element was missing from\n${projectJsonObject}")
                 viewModel?.logError("AI HTTP Handler: 'sessions' element missing in project.json")
+                lastSessionFetchTime = now
             }
 
         }
         catch (e: Exception) {
             logger.errorLog("Couldn't parse project.json: ${e.message}\n${e.stackTrace}")
             viewModel?.logError("AI HTTP Handler: Error parsing project.json: ${e.message}")
+            lastSessionFetchTime = now
         }
 
         return null

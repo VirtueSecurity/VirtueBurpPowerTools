@@ -125,13 +125,9 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
         val statusLabel = (createMetricLabel("HTTP Status Codes:", "").components[1] as JLabel).apply {
             putClientProperty("html.disable", null)
         }
-        val responseTimesLabel = (createMetricLabel("Response Times:", "").components[1] as JLabel).apply {
-            putClientProperty("html.disable", null)
-        }
 
         metricsPanel.add(gradesLabel.parent)
         metricsPanel.add(statusLabel.parent)
-        metricsPanel.add(responseTimesLabel.parent)
         
         uiScope.launch {
             viewModel.metrics.collectLatest { metrics ->
@@ -147,10 +143,6 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
                                    "<b>400s:</b> <font color='#0066CC'>${metrics.status400s}</font> / <font color='#666666'>${metrics.status400sTotal}</font><br/>" +
                                    "<b>500s:</b> <font color='#0066CC'>${metrics.status500s}</font> / <font color='#666666'>${metrics.status500sTotal}</font><br/>" +
                                    "<b>Fail:</b> <font color='#0066CC'>${metrics.statusFail}</font> / <font color='#666666'>${metrics.statusFailTotal}</font></html>"
-                
-                responseTimesLabel.text = "<html><b>Min:</b> <font color='#0066CC'>${metrics.minResponseTime}</font><br/>" +
-                                          "<b>Max:</b> <font color='#0066CC'>${metrics.maxResponseTime}</font><br/>" +
-                                          "<b>Avg:</b> <font color='#0066CC'>${metrics.avgResponseTime}</font></html>"
             }
         }
         
@@ -250,10 +242,6 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
             ChartSeries("Timeout/NoResp", Color.GRAY)
         ))
 
-        val timingChart = LineChart("Response Times (ms)", listOf(
-            ChartSeries("Avg Response Time", Color.BLUE)
-        ))
-
         uiScope.launch {
             viewModel.scannerMonitorState.collectLatest { state ->
                 rpsChart.updateData(listOf(
@@ -264,14 +252,10 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
                     state.redirectRps,
                     state.timeoutRps
                 ))
-                
-                timingChart.updateData(listOf(state.avgResponseTime))
-                timingChart.setSubtitle("Highest in last: 1m:${state.maxResponseTime1m.toInt()}ms, 5m:${state.maxResponseTime5m.toInt()}ms, 15m:${state.maxResponseTime15m.toInt()}ms, 30m:${state.maxResponseTime30m.toInt()}ms, 60m:${state.maxResponseTime60m.toInt()}ms")
             }
         }
 
         chartGrid.add(rpsChart)
-        chartGrid.add(timingChart)
 
         monitorPanel.add(chartGrid)
         panel.add(monitorPanel)
@@ -382,11 +366,14 @@ class SmartScanUI(private val api: MontoyaApi, private val viewModel: SmartScanV
                 g2.color = series[sIdx].color
                 
                 // Use different stroke styles for different series if they overlap
-                // Total (sIdx 0) is thickest, others are standard
-                if (sIdx == 0) {
-                    g2.stroke = BasicStroke(2f)
-                } else {
-                    g2.stroke = BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, if (sIdx % 2 == 0) floatArrayOf(5f, 5f) else null, 0f)
+                g2.stroke = when (sIdx) {
+                    0 -> BasicStroke(3f) // Total: Thick Solid
+                    1 -> BasicStroke(2f) // 200s: Medium Solid
+                    2 -> BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, floatArrayOf(5f, 5f), 0f) // 400s: Dashed
+                    3 -> BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, floatArrayOf(2f, 2f), 0f) // 5xx: Dotted
+                    4 -> BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, floatArrayOf(10f, 5f, 2f, 5f), 0f) // Redirects: Dash-Dot
+                    5 -> BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0f, floatArrayOf(15f, 5f), 0f) // Timeout: Long Dash
+                    else -> BasicStroke(1f)
                 }
                 
                 val xStep = w.toDouble() / (points.size - 1).coerceAtLeast(1)

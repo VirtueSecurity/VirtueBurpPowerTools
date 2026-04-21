@@ -22,9 +22,15 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.time.Duration as JavaDuration
 import java.util.UUID
 
+enum class ScannerMetricType {
+    SENT,
+    RECEIVED
+}
+
 data class ScannerMetric(
+    val messageId: Int,
+    val type: ScannerMetricType,
     val statusCode: Int,
-    val durationMs: Long,
     val timestamp: Instant
 )
 
@@ -35,13 +41,7 @@ data class TimeSeriesData(
     val status400Rps: List<Double>,
     val status5xxRps: List<Double>,
     val redirectRps: List<Double>,
-    val timeoutRps: List<Double>,
-    val avgResponseTime: List<Double>,
-    val maxResponseTime1m: Double = 0.0,
-    val maxResponseTime5m: Double = 0.0,
-    val maxResponseTime15m: Double = 0.0,
-    val maxResponseTime30m: Double = 0.0,
-    val maxResponseTime60m: Double = 0.0
+    val timeoutRps: List<Double>
 )
 
 data class MetricsState(
@@ -66,10 +66,7 @@ data class MetricsState(
     val status500s: String = "[N/A]",
     val status500sTotal: String = "[N/A]",
     val statusFail: String = "[N/A]",
-    val statusFailTotal: String = "[N/A]",
-    val minResponseTime: String = "[N/A]",
-    val maxResponseTime: String = "[N/A]",
-    val avgResponseTime: String = "[N/A]"
+    val statusFailTotal: String = "[N/A]"
 )
 
 data class CheckboxState(
@@ -122,13 +119,12 @@ class SmartScanViewModel(
     private data class GradedItemResult(
         val grade: String,
         val statusBucket: Int,
-        val durationMs: Long,
         val item: OrganizerItem
     )
 
     private var lastGradedResults: List<GradedItemResult> = emptyList()
 
-    private val _scannerMonitorState = MutableStateFlow(TimeSeriesData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()))
+    private val _scannerMonitorState = MutableStateFlow(TimeSeriesData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()))
     val scannerMonitorState: StateFlow<TimeSeriesData> = _scannerMonitorState.asStateFlow()
 
     private val scannerMetrics = ConcurrentLinkedQueue<ScannerMetric>()
@@ -137,8 +133,8 @@ class SmartScanViewModel(
         startMetricAggregation()
     }
 
-    fun addScannerMetric(statusCode: Int, durationMs: Long, timestamp: Instant) {
-        scannerMetrics.add(ScannerMetric(statusCode, durationMs, timestamp))
+    fun addScannerMetric(messageId: Int, type: ScannerMetricType, statusCode: Int, timestamp: Instant) {
+        scannerMetrics.add(ScannerMetric(messageId, type, statusCode, timestamp))
     }
 
     private fun startMetricAggregation() {
@@ -161,15 +157,22 @@ class SmartScanViewModel(
 
         val allMetrics = scannerMetrics.toList()
         if (allMetrics.isEmpty()) {
-            // Even if empty, we might want to update to empty lists to clear charts
-            _scannerMonitorState.value = TimeSeriesData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+            _scannerMonitorState.value = TimeSeriesData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
             return
         }
 
-        // We want to graph the last 60 seconds
         val windowSeconds = 60
+        val avgWindow = 15L
         val startTime = now.minusSeconds(windowSeconds.toLong())
+        val earliestNeeded = startTime.minusSeconds(avgWindow)
         
+        // Filter once for the entire calculation
+        val relevantMetrics = allMetrics.filter { it.timestamp >= earliestNeeded }
+        if (relevantMetrics.isEmpty()) {
+            _scannerMonitorState.value = TimeSeriesData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+            return
+        }
+
         val timestamps = mutableListOf<Instant>()
         val totalRps = mutableListOf<Double>()
         val s200Rps = mutableListOf<Double>()
@@ -177,40 +180,36 @@ class SmartScanViewModel(
         val s5xxRps = mutableListOf<Double>()
         val redirectRps = mutableListOf<Double>()
         val timeoutRps = mutableListOf<Double>()
-        val avgRespTimes = mutableListOf<Double>()
 
-        // Group metrics by the second they occurred in
-        val metricsInWindow = allMetrics.filter { it.timestamp >= startTime && it.timestamp <= now }
-        val metricsBySecond = metricsInWindow.groupBy { it.timestamp.truncatedTo(java.time.temporal.ChronoUnit.SECONDS) }
+        // Pre-process for timeouts: find SENT without RECEIVED
+        val receivedIds = relevantMetrics.asSequence().filter { it.type == ScannerMetricType.RECEIVED }.map { it.messageId }.toSet()
+        val timeoutThreshold = 30L // seconds
 
         for (i in 0..windowSeconds) {
             val secondStart = startTime.plusSeconds(i.toLong()).truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
-            val metricsInSecond = metricsBySecond[secondStart] ?: emptyList()
+            val windowStart = secondStart.minusSeconds(avgWindow - 1)
+            
+            val metricsInAvgWindow = relevantMetrics.filter { it.timestamp > windowStart.minusMillis(1) && it.timestamp <= secondStart }
             
             timestamps.add(secondStart)
-            totalRps.add(metricsInSecond.size.toDouble())
-            s200Rps.add(metricsInSecond.count { it.statusCode in 200..299 }.toDouble())
-            s400Rps.add(metricsInSecond.count { it.statusCode in 400..499 }.toDouble())
-            s5xxRps.add(metricsInSecond.count { it.statusCode >= 500 }.toDouble())
-            redirectRps.add(metricsInSecond.count { it.statusCode in 300..399 }.toDouble())
-            timeoutRps.add(metricsInSecond.count { it.statusCode == -1 }.toDouble())
             
-            val timedMetrics = metricsInSecond.filter { it.durationMs >= 0 }
-            if (timedMetrics.isNotEmpty()) {
-                avgRespTimes.add(timedMetrics.map { it.durationMs }.average())
-            } else {
-                avgRespTimes.add(0.0)
+            // Average over avgWindow
+            totalRps.add(metricsInAvgWindow.count { it.type == ScannerMetricType.SENT }.toDouble() / avgWindow)
+            s200Rps.add(metricsInAvgWindow.count { it.type == ScannerMetricType.RECEIVED && it.statusCode in 200..299 }.toDouble() / avgWindow)
+            s400Rps.add(metricsInAvgWindow.count { it.type == ScannerMetricType.RECEIVED && it.statusCode in 400..499 }.toDouble() / avgWindow)
+            s5xxRps.add(metricsInAvgWindow.count { it.type == ScannerMetricType.RECEIVED && it.statusCode >= 500 }.toDouble() / avgWindow)
+            redirectRps.add(metricsInAvgWindow.count { it.type == ScannerMetricType.RECEIVED && it.statusCode in 300..399 }.toDouble() / avgWindow)
+            
+            // Timeout RPS: Count SENT metrics that happened exactly timeoutThreshold seconds ago and never got a response
+            val timeoutPoint = secondStart.minusSeconds(timeoutThreshold)
+            val timeoutWindowStart = timeoutPoint.minusSeconds(avgWindow - 1)
+            val timeoutsInWindow = relevantMetrics.count { 
+                it.type == ScannerMetricType.SENT && 
+                it.timestamp > timeoutWindowStart.minusMillis(1) && 
+                it.timestamp <= timeoutPoint && 
+                it.messageId !in receivedIds 
             }
-        }
-
-        // Calculate Max Response times for different windows efficiently
-        val timedMetricsAll = allMetrics.filter { it.durationMs >= 0 }
-        fun getMax(minutes: Int): Double {
-            val since = now.minusSeconds(minutes.toLong() * 60)
-            return timedMetricsAll.asSequence()
-                .filter { it.timestamp >= since }
-                .map { it.durationMs.toDouble() }
-                .maxOrNull() ?: 0.0
+            timeoutRps.add(timeoutsInWindow.toDouble() / avgWindow)
         }
 
         _scannerMonitorState.value = TimeSeriesData(
@@ -220,13 +219,7 @@ class SmartScanViewModel(
             status400Rps = s400Rps,
             status5xxRps = s5xxRps,
             redirectRps = redirectRps,
-            timeoutRps = timeoutRps,
-            avgResponseTime = avgRespTimes,
-            maxResponseTime1m = getMax(1),
-            maxResponseTime5m = getMax(5),
-            maxResponseTime15m = getMax(15),
-            maxResponseTime30m = getMax(30),
-            maxResponseTime60m = getMax(60)
+            timeoutRps = timeoutRps
         )
     }
 
@@ -257,7 +250,6 @@ class SmartScanViewModel(
         // Filtered counts
         var fA = 0; var fB = 0; var fC = 0; var fD = 0; var fF = 0
         var fs200 = 0; var fs300 = 0; var fs400 = 0; var fs500 = 0; var fsFail = 0
-        var fMinTime = Long.MAX_VALUE; var fMaxTime = 0L; var fTotalTime = 0L; var fTimedCount = 0
 
         // Total counts
         var tA = 0; var tB = 0; var tC = 0; var tD = 0; var tF = 0
@@ -305,12 +297,6 @@ class SmartScanViewModel(
                     500 -> fs500++
                     -1 -> fsFail++
                 }
-                if (result.durationMs >= 0) {
-                    if (result.durationMs < fMinTime) fMinTime = result.durationMs
-                    if (result.durationMs > fMaxTime) fMaxTime = result.durationMs
-                    fTotalTime += result.durationMs
-                    fTimedCount++
-                }
             }
         }
 
@@ -339,10 +325,7 @@ class SmartScanViewModel(
             status500s = fs500.toString(),
             status500sTotal = ts500.toString(),
             statusFail = fsFail.toString(),
-            statusFailTotal = tsFail.toString(),
-            minResponseTime = if (fTimedCount > 0) "${fMinTime}ms" else "[N/A]",
-            maxResponseTime = if (fTimedCount > 0) "${fMaxTime}ms" else "[N/A]",
-            avgResponseTime = if (fTimedCount > 0) "${fTotalTime / fTimedCount}ms" else "[N/A]"
+            statusFailTotal = tsFail.toString()
         )
     }
 
@@ -524,29 +507,6 @@ class SmartScanViewModel(
                         reasons.add("SPA Template")
                     }
 
-                    // Response Timing Grading
-                    var millis = -1L
-                    item.timingData()?.ifPresent { timing ->
-                        timing.timeBetweenRequestSentAndEndOfResponse()?.let { duration ->
-                            millis = duration.toMillis()
-                        }
-                    }
-
-                    if (millis > 5000) {
-                        grade = "F"
-                        reasons.add("Slow (>5s: ${millis}ms)")
-                    } else if (millis > 3000) {
-                        if (grade != "F") {
-                            grade = "D"
-                            reasons.add("Slow (3-5s: ${millis}ms)")
-                        }
-                    } else if (millis > 1000) {
-                        if (grade != "F" && grade != "D") {
-                            grade = "C"
-                            reasons.add("Slow (1-3s: ${millis}ms)")
-                        }
-                    }
-
                     // 9. responses longer than 2 megabytes: F, 1-2MB: D
                     val bodyLength = response.body().length()
                     if (bodyLength > 2 * 1024 * 1024) {
@@ -666,17 +626,7 @@ class SmartScanViewModel(
                 val reasonText = reasons.joinToString(", ")
                 item.annotations().setNotes("Grade: $grade, reason: $reasonText")
 
-                // Return metrics for this item
-                val durationMs = response?.let { resp ->
-                    var m = -1L
-                    item.timingData()?.ifPresent { timing ->
-                        timing.timeBetweenRequestSentAndEndOfResponse()?.let { duration ->
-                            m = duration.toMillis()
-                        }
-                    }
-                    m
-                } ?: -1L
-                GradedItemResult(grade, statusBucket, durationMs, item)
+                GradedItemResult(grade, statusBucket, item)
             }
         }.awaitAll()
 

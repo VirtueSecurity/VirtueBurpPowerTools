@@ -66,11 +66,11 @@ class MatchReplaceSessionExtension(private val api: MontoyaApi, private val myEx
                 requests.addAll(selectedRequestResponses.map { it.request() })
             }
 
-            requests.forEach { request ->
-                api.logging().logToOutput("=================${request.url()}=================")
-                api.logging().logToOutput(doMatchReplace(request.toString()))
-                api.logging().logToOutput("--------------------------------------------------")
-            }
+//            requests.forEach { request ->
+//                api.logging().logToOutput("=================${request.url()}=================")
+//                api.logging().logToOutput(doMatchReplace(request.toString()))
+//                api.logging().logToOutput("--------------------------------------------------")
+//            }
 
 
         }
@@ -90,18 +90,47 @@ class MatchReplaceSessionExtension(private val api: MontoyaApi, private val myEx
         return ActionResult.actionResult(null)
     }
 
+    private var cachedRegexOne: Pair<String, Regex>? = null
+    private var cachedRegexTwo: Pair<String, Regex>? = null
+    private var cachedRegexThree: Pair<String, Regex>? = null
+
+    private fun getRegexOne(): Regex? {
+        val pattern = myExtensionSettings.matchOneSetting
+        if (pattern.isBlank()) return null
+        if (cachedRegexOne?.first != pattern) {
+            cachedRegexOne = pattern to Regex(pattern, regexOptions)
+        }
+        return cachedRegexOne?.second
+    }
+
+    private fun getRegexTwo(): Regex? {
+        val pattern = myExtensionSettings.matchTwoSetting
+        if (pattern.isBlank()) return null
+        if (cachedRegexTwo?.first != pattern) {
+            cachedRegexTwo = pattern to Regex(pattern, regexOptions)
+        }
+        return cachedRegexTwo?.second
+    }
+
+    private fun getRegexThree(): Regex? {
+        val pattern = myExtensionSettings.matchThreeSetting
+        if (pattern.isBlank()) return null
+        if (cachedRegexThree?.first != pattern) {
+            cachedRegexThree = pattern to Regex(pattern, regexOptions)
+        }
+        return cachedRegexThree?.second
+    }
+
     private fun doMatchReplace(requestInputString: String): String {
 
-        logger.debugLog("Found:\n$requestInputString")
-        logger.debugLog("Match: ${myExtensionSettings.matchOneSetting}")
-        logger.debugLog("Replace: ${myExtensionSettings.replaceOneSetting}")
+//        logger.debugLog("Found:\n$requestInputString")
 
+        var newString = requestInputString
+        getRegexOne()?.let { newString = it.replace(newString, myExtensionSettings.replaceOneSetting) }
+        getRegexTwo()?.let { newString = it.replace(newString, myExtensionSettings.replaceTwoSetting) }
+        getRegexThree()?.let { newString = it.replace(newString, myExtensionSettings.replaceThreeSetting) }
 
-        var newString = Regex(myExtensionSettings.matchOneSetting, regexOptions).replace(requestInputString,myExtensionSettings.replaceOneSetting)
-        newString = Regex(myExtensionSettings.matchTwoSetting, regexOptions).replace(newString,myExtensionSettings.replaceTwoSetting)
-        newString = Regex(myExtensionSettings.matchThreeSetting, regexOptions).replace(newString,myExtensionSettings.replaceThreeSetting)
-
-        logger.debugLog("Result: $newString")
+//        logger.debugLog("Result: $newString")
         return newString
 
     }

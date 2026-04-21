@@ -114,6 +114,19 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
     private val pluginName = "Send Unique to Organizer"
     private val regexOptions = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE)
+    private val MAX_STRING_PROCESS_SIZE = 1024 * 1024 // 1MB limit for string processing
+
+    private var cachedIgnoreRegex: Pair<String, Regex>? = null
+    private fun getIgnoreRegex(): Regex? {
+        val pattern = myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch
+        if (pattern.isBlank()) return null
+        if (cachedIgnoreRegex?.first != pattern) {
+            cachedIgnoreRegex = pattern to Regex(pattern, regexOptions)
+        }
+        return cachedIgnoreRegex?.second
+    }
+
+    private val sessionNoteRegex = Regex("Session: (\\d)")
 
     val concurrentSetRequestResponses = ConcurrentHashMap.newKeySet<Long>()
 
@@ -131,13 +144,12 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 
         scope.launch {
             if (isActive) {
-
+                    // Cache sessionNoteRegex outside the loop
                     api.organizer().items().filter{ item -> item.annotations().hasNotes() && item.annotations().notes()!=null && item.annotations().notes().contains("Session: ") }.forEach { item ->
                         try {
 
                             val notes = item.annotations().notes()
-                            val pattern = Regex("Session: (\\d)")
-                            val results = pattern.find(notes)
+                            val results = sessionNoteRegex.find(notes)
                             if(results != null && results.groups.size > 1) {
                                 results.groups[1]?.let {
 
@@ -174,19 +186,28 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 //        }
 
         scope.launch {
+            var lastProcessedCount = 0
             while (isActive) {
                 delay(30000)
                 try {
-                    api.organizer().items().filter{ item -> !item.annotations().hasHighlightColor() && item.annotations().hasNotes() && item.annotations().notes()!=null }.forEach { item ->
-                        val notes = item.annotations().notes()
-                        val pattern = Regex("Session: (\\d)")
-                        val results = pattern.find(notes)
-                        if(results != null && results.groups.size > 1) {
-                            results.groups[1]?.let {
-                                logger.debugLog("Trying to set organizer color to ${resolveHighlightColor(it.value).name}")
-                                item.annotations().setHighlightColor(resolveHighlightColor(it.value))
+                    val allItems = api.organizer().items()
+                    // Only process if the number of items has changed, or just process the new ones at the end
+                    if (allItems.size > lastProcessedCount) {
+                        // Start from lastProcessedCount to avoid re-scanning old items
+                        for (i in lastProcessedCount until allItems.size) {
+                            val item = allItems[i]
+                            if (!item.annotations().hasHighlightColor() && item.annotations().hasNotes() && item.annotations().notes() != null) {
+                                val notes = item.annotations().notes()
+                                val results = sessionNoteRegex.find(notes)
+                                if (results != null && results.groups.size > 1) {
+                                    results.groups[1]?.let {
+                                        logger.debugLog("Trying to set organizer color to ${resolveHighlightColor(it.value).name}")
+                                        item.annotations().setHighlightColor(resolveHighlightColor(it.value))
+                                    }
+                                }
                             }
                         }
+                        lastProcessedCount = allItems.size
                     }
                 } catch (e: Exception) {
                     logger.errorLog("Exception in Organizer highlight updater coroutine:\n${e.message}")
@@ -249,6 +270,7 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
 //        }
 //        else {
 //            notSentReason=NotSentToOrganizerReason.IGNORE_REGEX.name
+//            notSentReason=NotSentToOrganizerReason.IGNORE_REGEX.name
 //            val annotations = labelNotSentToOrganizer(responseReceived, NotSentToOrganizerReason.IGNORE_REGEX)
 //            responseReceived.annotations().setNotes(annotations.notes())
 //            responseReceived.annotations().setHighlightColor(annotations.highlightColor())
@@ -264,16 +286,25 @@ class SendUniqueToOrganizer(private val api: MontoyaApi, private val myExtension
     private fun processItemSync(responseReceived: HttpResponseReceived) : Annotations {
 
         var modifiedAnnotations = responseReceived.annotations()
-        val responseString = responseReceived.toString()
         val request = responseReceived.initiatingRequest()
-        val requestString = request.toString()
-        val ignoreRegex = Regex(myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch,regexOptions)
         var notSentReason = "None"
 
+        val ignoreRegex = getIgnoreRegex()
+        var shouldIgnore = false
 
-        if(myExtensionSettings.uniqueToOrganizerIgnoreRegexMatch.isBlank() ||
-            !responseString.matches(ignoreRegex) ||
-            !requestString.matches(ignoreRegex)) {
+        if (ignoreRegex != null) {
+            // Check size before converting to string for regex matching
+            if (request.toByteArray().length() < MAX_STRING_PROCESS_SIZE && responseReceived.toByteArray().length() < MAX_STRING_PROCESS_SIZE) {
+                val responseString = responseReceived.toString()
+                val requestString = request.toString()
+                if (responseString.contains(ignoreRegex) || requestString.contains(ignoreRegex)) {
+                    shouldIgnore = true
+                }
+            }
+        }
+
+
+        if(!shouldIgnore) {
 
             val possibleItem = PossibleUniqueItemForOrganizer(myExtensionSettings.uniqueToOrganizerSelectedSession,
                 request,

@@ -8,6 +8,7 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.params.HttpParameterType
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.*
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.*
 import java.util.concurrent.ConcurrentHashMap
@@ -98,7 +99,8 @@ class CrawlHttpHandler(
     private var cachedInScopePrefixes: List<String> = emptyList()
     private var cachedDownloadedJsFiles: Set<String> = emptySet()
     private var lastConfigCheckTime: Long = 0
-    private val CONFIG_CACHE_DURATION_MS = 5000L
+    private var lastFileModifiedTime: Long = 0
+    private val CONFIG_CACHE_DURATION_MS = 1000L
 
     private fun updateProjectConfig(projectJsonPathStr: String) {
         val now = System.currentTimeMillis()
@@ -107,13 +109,16 @@ class CrawlHttpHandler(
         }
 
         synchronized(fileLock) {
-            // Double-checked locking
-            if (projectJsonPathStr == lastProjectJsonPath && now - lastConfigCheckTime < CONFIG_CACHE_DURATION_MS) {
-                return
-            }
-            
             val projectPath = Path.of(projectJsonPathStr)
             if (projectPath.exists()) {
+                val currentModifiedTime = Files.getLastModifiedTime(projectPath).toMillis()
+                
+                // Even if cache expired, check if file actually changed
+                if (projectJsonPathStr == lastProjectJsonPath && currentModifiedTime == lastFileModifiedTime) {
+                    lastConfigCheckTime = now
+                    return
+                }
+
                 try {
                     val content = projectPath.readText()
                     val root = json.parseToJsonElement(content).jsonObject
@@ -144,13 +149,17 @@ class CrawlHttpHandler(
 
                     lastProjectJsonPath = projectJsonPathStr
                     lastConfigCheckTime = now
+                    lastFileModifiedTime = currentModifiedTime
                     viewModel.logAction("Project configuration updated from $projectJsonPathStr")
                 } catch (e: Exception) {
                     viewModel.logError("Error parsing project.json for JS downloader: ${e.message}")
+                    // Still update time to avoid constant re-parsing of broken file
+                    lastConfigCheckTime = now
                 }
             }
             else {
                 viewModel.logError("Project.json does not exist at $projectJsonPathStr")
+                lastConfigCheckTime = now
             }
         }
     }
