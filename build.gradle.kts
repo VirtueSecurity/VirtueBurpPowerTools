@@ -56,6 +56,15 @@ tasks.test {
     useJUnitPlatform()
 }
 
+tasks.register<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("metricsServerJar") {
+    archiveClassifier.set("metrics-server")
+    from(sourceSets.main.get().output)
+    configurations = listOf(project.configurations.runtimeClasspath.get())
+    manifest {
+        attributes["Main-Class"] = "com.nickcoblentz.montoya.utilities.MetricsServerKt"
+    }
+}
+
 kotlin {
     jvmToolchain(25)
 }

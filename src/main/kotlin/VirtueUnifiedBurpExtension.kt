@@ -3,7 +3,6 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.HighlightColor
 import burp.api.montoya.ui.settings.SettingsPanelBuilder
 import burp.api.montoya.ui.settings.SettingsPanelPersistence
-import com.nickcoblentz.montoya.SmartScanExtension
 import com.nickcoblentz.montoya.DisposableEmailScanChecker
 import com.nickcoblentz.montoya.EveryParameter2
 import com.nickcoblentz.montoya.ManualScanIssueManager
@@ -56,7 +55,7 @@ class VirtueUnifiedBurpExtension : BurpExtension {
         api.extension().registerUnloadingHandler { montoyaWSUtils.shutdown() }
 //        VariableExtractInjectExtension(api, projectSettings)
         SendUniqueToOrganizer(api, projectSettings)
-        SmartScanExtension(api, projectSettings)
+
 
 
         api.userInterface().registerSettingsPanel(projectSettings.settingsPanel)
@@ -182,17 +181,6 @@ class MyExtensionSettings {
     val uniqueToOrganizerSession5Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 5 (${HighlightColor.YELLOW.name}) Name", "Org 2 Low")
     val uniqueToOrganizerSession6Name: String by settingsManager.stringSetting("Send Unique to Organizer Session 6 (${HighlightColor.PINK.name}) Name", "Other")
     val uniqueToOrganizerSelectedSession: String by settingsManager.listSetting("Send Unique to Organizer: Selected Session", mutableListOf<String>("1","2","3","4","5","6"),"1")
-
-
-    val aiSessionHandlerEnabled: Boolean by settingsManager.booleanSetting("AI Session Handler: Global Enabled?", false)
-    val aiSessionHandlerScannerEnabled: Boolean by settingsManager.booleanSetting("AI Session Handler: Apply to Scanner?", true)
-    val aiSessionHandlerRepeaterEnabled: Boolean by settingsManager.booleanSetting("AI Session Handler: Apply to Repeater?", true)
-    val aiSessionHandlerExtensionsEnabled: Boolean by settingsManager.booleanSetting("AI Session Handler: Apply to Extensions?", true)
-    val aiSessionHandlerIntruderEnabled: Boolean by settingsManager.booleanSetting("AI Session Handler: Apply to Intruder?", true)
-    val aiSessionHandlerProjectJSONPath: String by settingsManager.stringSetting("AI Session Handler: Full Path to project.json", "")
-
-
-
 
     val settingsPanel = settingsManager.buildSettingsPanel()
 
